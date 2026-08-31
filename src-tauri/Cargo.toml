@@ -1,0 +1,18 @@
+[package]
+name = "spotify-dj-converter"
+version = "2.0.0"
+description = "Spotify Music & DJ Converter - Tauri v2 Edition"
+authors = ["Spotify DJ Suite"]
+edition = "2021"
+
+[lib]
+name = "spotify_dj_converter_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

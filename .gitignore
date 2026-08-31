@@ -1,0 +1,19 @@
+﻿# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+.venv/
+downloads/
+output.txt
+
+# Tauri / Rust
+src-tauri/target/
+
+# Environment / Logs
+.env
+*.log

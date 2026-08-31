@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Music & DJ Converter - Ultimate Pro</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Framer Motion -->
+  <script src="https://unpkg.com/framer-motion@10.18.0/dist/framer-motion.js"></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Google Fonts: Lato, Noto Sans Thai & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Lato', 'Noto Sans Thai', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            sp: {
+              black: '#000000',
+              base: '#121212',
+              card: '#181818',
+              cardHover: '#282828',
+              subcard: '#242424',
+              green: '#1DB954',
+              greenHover: '#1ED760',
+              greenActive: '#169C46',
+              text: '#FFFFFF',
+              muted: '#B3B3B3',
+              subdued: '#727272',
+              border: '#2A2A2A',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Lato', 'Noto Sans Thai', sans-serif;
+      background-color: #000000;
+      color: #FFFFFF;
+      user-select: none;
+      overflow: hidden;
+    }
+    /* Spotify Scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: hsla(0,0%,100%,.3);
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: hsla(0,0%,100%,.5);
+    }
+  </style>
+</head>
+<body class="bg-sp-black antialiased selection:bg-sp-green selection:text-black">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    const { motion, AnimatePresence } = window.Motion;
+
+    // Camelot Wheel Layout definition
+    const CAMELOT_WHEEL = [
+      { key: '1B', musical: 'B Maj', rel: '1A', num: 1, type: 'B', color: '#14b8a6' },
+      { key: '2B', musical: 'F# Maj', rel: '2A', num: 2, type: 'B', color: '#0ea5e9' },
+      { key: '3B', musical: 'Db Maj', rel: '3A', num: 3, type: 'B', color: '#3b82f6' },
+      { key: '4B', musical: 'Ab Maj', rel: '4A', num: 4, type: 'B', color: '#8b5cf6' },
+      { key: '5B', musical: 'Eb Maj', rel: '5A', num: 5, type: 'B', color: '#a855f7' },
+      { key: '6B', musical: 'Bb Maj', rel: '6A', num: 6, type: 'B', color: '#ec4899' },
+      { key: '7B', musical: 'F Maj', rel: '7A', num: 7, type: 'B', color: '#f43f5e' },
+      { key: '8B', musical: 'C Maj', rel: '8A', num: 8, type: 'B', color: '#f97316' },
+      { key: '9B', musical: 'G Maj', rel: '9A', num: 9, type: 'B', color: '#eab308' },
+      { key: '10B', musical: 'D Maj', rel: '10A', num: 10, type: 'B', color: '#84cc16' },
+      { key: '11B', musical: 'A Maj', rel: '11A', num: 11, type: 'B', color: '#22c55e' },
+      { key: '12B', musical: 'E Maj', rel: '12A', num: 12, type: 'B', color: '#10b981' },
+      // Minor (A)
+      { key: '1A', musical: 'Ab Min', rel: '1B', num: 1, type: 'A', color: '#2dd4bf' },
+      { key: '2A', musical: 'Eb Min', rel: '2B', num: 2, type: 'A', color: '#38bdf8' },
+      { key: '3A', musical: 'Bb Min', rel: '3B', num: 3, type: 'A', color: '#60a5fa' },
+      { key: '4A', musical: 'F Min', rel: '4B', num: 4, type: 'A', color: '#a78bfa' },
+      { key: '5A', musical: 'C Min', rel: '5B', num: 5, type: 'A', color: '#c084fc' },
+      { key: '6A', musical: 'G Min', rel: '6B', num: 6, type: 'A', color: '#f472b6' },
+      { key: '7A', musical: 'D Min', rel: '7B', num: 7, type: 'A', color: '#fb7185' },
+      { key: '8A', musical: 'A Min', rel: '8B', num: 8, type: 'A', color: '#fb923c' },
+      { key: '9A', musical: 'E Min', rel: '9B', num: 9, type: 'A', color: '#facc15' },
+      { key: '10A', musical: 'B Min', rel: '10B', num: 10, type: 'A', color: '#a3e635' },
+      { key: '11A', musical: 'F# Min', rel: '11B', num: 11, type: 'A', color: '#4ade80' },
+      { key: '12A', musical: 'C# Min', rel: '12B', num: 12, type: 'A', color: '#34d399' },
+    ];
+
+    function App() {
+      const [url, setUrl] = useState('');
+      const [tracks, setTracks] = useState([]);
+      const [isAnalyzing, setIsAnalyzing] = useState(false);
+      const [isConvertingAll, setIsConvertingAll] = useState(false);
+      const [format, setFormat] = useState('MP3');
+      const [quality, setQuality] = useState('320 kbps');
+      const [stemType, setStemType] = useState('full'); // 'full' | 'acapella' | 'instrumental'
+      const [folderMode, setFolderMode] = useState('single'); // 'single' | 'artist_album' | 'camelot_key'
+      const [outputDir, setOutputDir] = useState('downloads');
+      const [notification, setNotification] = useState(null);
+
+      // Player State
+      const [activeTrack, setActiveTrack] = useState(null);
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [currentTime, setCurrentTime] = useState(0);
+      const [duration, setDuration] = useState(0);
+      const [volume, setVolume] = useState(0.8);
+      const audioRef = useRef(new Audio());
+
+      // Modals
+      const [showCamelotModal, setShowCamelotModal] = useState(false);
+      const [selectedKeyForWheel, setSelectedKeyForWheel] = useState('8A');
+      const [editingTrack, setEditingTrack] = useState(null);
+
+      const showToast = (msg, type = 'info') => {
+        setNotification({ msg, type });
+        setTimeout(() => setNotification(null), 3500);
+      };
+
+      useEffect(() => {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.get_output_dir().then(setOutputDir);
+        }
+
+        const audio = audioRef.current;
+        audio.volume = volume;
+        const updateTime = () => setCurrentTime(audio.currentTime);
+        const updateDuration = () => setDuration(audio.duration || 0);
+        const onEnd = () => setIsPlaying(false);
+
+        audio.addEventListener('timeupdate', updateTime);
+        audio.addEventListener('loadedmetadata', updateDuration);
+        audio.addEventListener('ended', onEnd);
+
+        return () => {
+          audio.removeEventListener('timeupdate', updateTime);
+          audio.removeEventListener('loadedmetadata', updateDuration);
+          audio.removeEventListener('ended', onEnd);
+        };
+      }, []);
+
+      const playTrack = async (t) => {
+        if (activeTrack && activeTrack.id === t.id && isPlaying) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+          return;
+        }
+
+        if (t.filepath && window.pywebview && window.pywebview.api) {
+          const dataUrl = await window.pywebview.api.get_audio_data_url(t.filepath);
+          if (dataUrl) {
+            audioRef.current.src = dataUrl;
+            audioRef.current.play();
+            setActiveTrack(t);
+            setIsPlaying(true);
+            return;
+          }
+        }
+        showToast('Please convert/download the track first to preview full audio', 'info');
+      };
+
+      const togglePlay = () => {
+        if (!activeTrack) return;
+        if (isPlaying) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        } else {
+          audioRef.current.play();
+          setIsPlaying(true);
+        }
+      };
+
+      const handleSeek = (e) => {
+        const val = parseFloat(e.target.value);
+        audioRef.current.currentTime = val;
+        setCurrentTime(val);
+      };
+
+      const handleVolume = (e) => {
+        const val = parseFloat(e.target.value);
+        setVolume(val);
+        audioRef.current.volume = val;
+      };
+
+      const formatTime = (secs) => {
+        if (!secs || isNaN(secs)) return '0:00';
+        const m = Math.floor(secs / 60);
+        const s = Math.floor(secs % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+      };
+
+      const handlePaste = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          setUrl(text.trim());
+        } catch (e) {
+          showToast('Clipboard access denied or empty', 'error');
+        }
+      };
+
+      const handleAnalyze = async () => {
+        if (!url.trim()) return;
+        setIsAnalyzing(true);
+        try {
+          if (window.pywebview && window.pywebview.api) {
+            const fetched = await window.pywebview.api.fetch_metadata(url.trim());
+            if (fetched && fetched.length > 0) {
+              setTracks(prev => [...prev, ...fetched]);
+              setUrl('');
+              showToast(`Added ${fetched.length} song(s) to playlist`, 'success');
+            } else {
+              showToast('No songs found for this link', 'error');
+            }
+          }
+        } catch (err) {
+          showToast('Error analyzing URL: ' + err, 'error');
+        } finally {
+          setIsAnalyzing(false);
+        }
+      };
+
+      const handleHarmonicSort = async () => {
+        if (tracks.length <= 1) return;
+        if (window.pywebview && window.pywebview.api) {
+          const sorted = await window.pywebview.api.harmonic_sort(tracks);
+          setTracks(sorted);
+          showToast('Reordered playlist by Camelot Harmonic Wheel, Energy & BPM', 'success');
+        }
+      };
+
+      const handleExportRekordbox = async () => {
+        if (tracks.length === 0) return showToast('Queue is empty', 'error');
+        if (window.pywebview && window.pywebview.api) {
+          const res = await window.pywebview.api.export_rekordbox(tracks);
+          if (res) showToast(`rekordbox XML with Hot Cues exported: ${res}`, 'success');
+        }
+      };
+
+      const handleExportM3U8 = async () => {
+        if (tracks.length === 0) return showToast('Queue is empty', 'error');
+        if (window.pywebview && window.pywebview.api) {
+          const res = await window.pywebview.api.export_m3u8(tracks);
+          if (res) showToast(`M3U8 Playlist exported: ${res}`, 'success');
+        }
+      };
+
+      const handleBrowseDir = async () => {
+        if (window.pywebview && window.pywebview.api) {
+          const path = await window.pywebview.api.browse_folder();
+          if (path) setOutputDir(path);
+        }
+      };
+
+      const handleOpenFolder = () => {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.open_folder(outputDir);
+        }
+      };
+
+      const removeTrack = (index) => {
+        setTracks(prev => prev.filter((_, i) => i !== index));
+      };
+
+      const convertSingle = async (index) => {
+        const target = tracks[index];
+        updateTrackStatus(index, 10, 'Downloading...');
+        try {
+          if (window.pywebview && window.pywebview.api) {
+            const res = await window.pywebview.api.download_single(target, format, quality, stemType, folderMode);
+            if (res.success) {
+              setTracks(prev => {
+                const next = [...prev];
+                next[index] = { 
+                  ...next[index], 
+                  ...res.track, 
+                  progress: 100, 
+                  statusText: `${res.track.camelot || '8A'} • ${Math.round(res.track.bpm || 128)} BPM`, 
+                  done: true 
+                };
+                return next;
+              });
+              showToast(`Downloaded: ${target.title} [⚡ Energy ${res.track.energy || 6}/10]`, 'success');
+            } else {
+              updateTrackStatus(index, 0, 'Failed');
+            }
+          }
+        } catch (e) {
+          updateTrackStatus(index, 0, 'Failed');
+        }
+      };
+
+      const updateTrackStatus = (idx, pct, text) => {
+        setTracks(prev => {
+          const next = [...prev];
+          if (next[idx]) {
+            next[idx] = { ...next[idx], progress: pct, statusText: text };
+          }
+          return next;
+        });
+      };
+
+      const handleConvertAll = async () => {
+        if (tracks.length === 0 || isConvertingAll) return;
+        setIsConvertingAll(true);
+        for (let i = 0; i < tracks.length; i++) {
+          if (!tracks[i].done) {
+            await convertSingle(i);
+          }
+        }
+        setIsConvertingAll(false);
+        showToast('All songs downloaded, analyzed, and tagged with Cues!', 'success');
+      };
+
+      const openWheelForTrack = (key) => {
+        setSelectedKeyForWheel(key || '8A');
+        setShowCamelotModal(true);
+      };
+
+      const saveEditedTags = async (e) => {
+        e.preventDefault();
+        if (!editingTrack) return;
+        const idx = editingTrack.index;
+        setTracks(prev => {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...editingTrack };
+          return next;
+        });
+        if (window.pywebview && window.pywebview.api) {
+          await window.pywebview.api.save_tags(editingTrack);
+        }
+        setEditingTrack(null);
+        showToast('Metadata updated!', 'success');
+      };
+
+      // Camelot compatibility helper
+      const isHarmonicMatch = (targetKey, candKey) => {
+        if (!targetKey || !candKey || targetKey.startsWith('-')) return false;
+        try {
+          const tNum = parseInt(targetKey.slice(0, -1));
+          const tType = targetKey.slice(-1);
+          const cNum = parseInt(candKey.slice(0, -1));
+          const cType = candKey.slice(-1);
+
+          if (tNum === cNum && tType === cType) return 'exact';
+          if (tNum === cNum && tType !== cType) return 'relative';
+          if (Math.abs(tNum - cNum) === 1 || Math.abs(tNum - cNum) === 11) {
+            if (tType === cType) return 'neighbor';
+          }
+          if (Math.abs(tNum - cNum) === 2 || Math.abs(tNum - cNum) === 10) {
+            if (tType === cType) return 'energy_boost';
+          }
+        } catch (e) {}
+        return false;
+      };
+
+      return (
+        <div className="flex flex-col h-screen w-screen bg-sp-black select-none overflow-hidden">
+          
+          {/* Main Area with Sidebar & Content */}
+          <div className="flex flex-1 p-2 gap-2 overflow-hidden min-h-0">
+            
+            {/* Left Sidebar (Spotify Nav Style) */}
+            <aside className="w-60 bg-sp-base rounded-lg flex flex-col p-4 flex-shrink-0">
+              {/* Spotify Brand Logo */}
+              <div className="flex items-center gap-2.5 px-2 py-3 mb-4">
+                <svg className="w-8 h-8 text-sp-green" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.49 17.306c-.215.353-.676.467-1.03.25-2.825-1.727-6.38-2.118-10.57-1.16-.402.093-.805-.158-.897-.56-.093-.403.158-.805.56-.898 4.588-1.05 8.528-.604 11.688 1.338.353.216.466.677.249 1.03zm1.464-3.26c-.27.44-.848.58-1.288.31-3.235-1.99-8.167-2.564-11.994-1.402-.495.15-1.025-.13-1.176-.625s.13-1.025.625-1.176c4.378-1.328 9.808-.687 13.523 1.605.44.27.58.848.31 1.288zm.126-3.41c-3.878-2.302-10.28-2.515-13.993-1.388-.595.18-1.23-.158-1.41-.753-.18-.595.158-1.23.753-1.41 4.267-1.296 11.33-1.045 15.79 1.603.535.318.708 1.01.39 1.545-.318.536-1.01.708-1.54 3.903z"/>
+                </svg>
+                <span className="font-bold text-base tracking-tight text-white">Spotify DJ Pro</span>
+              </div>
+
+              {/* Nav Menu */}
+              <div className="space-y-1 text-sm font-semibold">
+                <div className="flex items-center gap-4 px-3 py-2.5 rounded-md bg-sp-cardHover text-white cursor-pointer">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                  </svg>
+                  <span>Convert & Queue</span>
+                </div>
+                <div onClick={handleHarmonicSort} className="flex items-center gap-4 px-3 py-2.5 rounded-md text-sp-muted hover:text-white hover:bg-sp-cardHover/50 transition cursor-pointer">
+                  <svg className="w-5 h-5 text-sp-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>Harmonic Mix (Camelot)</span>
+                </div>
+                <div onClick={() => openWheelForTrack('8A')} className="flex items-center gap-4 px-3 py-2.5 rounded-md text-sp-muted hover:text-white hover:bg-sp-cardHover/50 transition cursor-pointer">
+                  <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" strokeWidth="2"/>
+                    <path strokeLinecap="round" strokeWidth="2" d="M12 3v18M3 12h18"/>
+                  </svg>
+                  <span>Camelot Visualizer</span>
+                </div>
+                <div onClick={handleExportRekordbox} className="flex items-center gap-4 px-3 py-2.5 rounded-md text-sp-muted hover:text-white hover:bg-sp-cardHover/50 transition cursor-pointer">
+                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <span>rekordbox Hot Cues</span>
+                </div>
+              </div>
+
+              {/* Stem Mode & Organization Settings */}
+              <div className="mt-auto space-y-3 pt-3 border-t border-white/5 text-xs">
+                <div>
+                  <label className="text-[11px] font-semibold text-sp-subdued uppercase tracking-wider block mb-1">
+                    Stem Isolation:
+                  </label>
+                  <select
+                    value={stemType}
+                    onChange={(e) => setStemType(e.target.value)}
+                    className="w-full bg-sp-card text-white text-xs px-2.5 py-1.5 rounded border border-white/10 focus:outline-none"
+                  >
+                    <option value="full">🎵 Full Track</option>
+                    <option value="acapella">🎤 Acapella (Vocals Only)</option>
+                    <option value="instrumental">🎹 Instrumental (Beat Only)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-sp-subdued uppercase tracking-wider block mb-1">
+                    Folder Organizer:
+                  </label>
+                  <select
+                    value={folderMode}
+                    onChange={(e) => setFolderMode(e.target.value)}
+                    className="w-full bg-sp-card text-white text-xs px-2.5 py-1.5 rounded border border-white/10 focus:outline-none"
+                  >
+                    <option value="single">📁 Single Output Folder</option>
+                    <option value="artist_album">👤 By Artist / Album</option>
+                    <option value="camelot_key">🎛️ By Camelot Key (8A, 9A...)</option>
+                  </select>
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 bg-gradient-to-b from-[#222222] via-sp-base to-sp-base rounded-lg flex flex-col overflow-hidden min-w-0">
+              
+              {/* Top Search Bar */}
+              <div className="p-5 pb-3 flex items-center justify-between gap-4 border-b border-white/5 bg-sp-base/40 backdrop-blur-md">
+                <div className="flex-1 max-w-xl relative flex items-center">
+                  <div className="absolute left-3.5 text-sp-muted">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                    placeholder="Paste Spotify Playlist / Track URL or Song Name..."
+                    className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] text-white text-xs pl-10 pr-20 py-3 rounded-full border border-transparent focus:border-white/20 focus:outline-none transition"
+                  />
+                  <div className="absolute right-2 flex items-center gap-1">
+                    {url && (
+                      <button onClick={() => setUrl('')} className="p-1 text-sp-muted hover:text-white text-xs">
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      onClick={handlePaste}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-sp-muted hover:text-white rounded-full bg-white/5 hover:bg-white/10"
+                    >
+                      Paste
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  disabled={isAnalyzing}
+                  onClick={handleAnalyze}
+                  className="px-5 py-2.5 bg-white hover:scale-105 active:scale-95 text-black font-bold text-xs rounded-full transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isAnalyzing && <span className="animate-spin text-xs">↻</span>}
+                  <span>{isAnalyzing ? 'Analyzing...' : 'Add to Queue'}</span>
+                </button>
+              </div>
+
+              {/* Action Header */}
+              <div className="px-6 py-4 flex items-center justify-between gap-4 border-b border-white/5">
+                <div className="flex items-center gap-4">
+                  <button
+                    disabled={tracks.length === 0 || isConvertingAll}
+                    onClick={handleConvertAll}
+                    className="w-12 h-12 rounded-full bg-sp-green hover:bg-sp-greenHover hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-lg transition disabled:opacity-40 disabled:hover:scale-100"
+                    title="Convert All Tracks"
+                  >
+                    {isConvertingAll ? (
+                      <span className="animate-spin font-bold text-sm">↻</span>
+                    ) : (
+                      <svg className="w-6 h-6 fill-current translate-x-[1px]" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleHarmonicSort}
+                    className="px-4 py-2 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white hover:scale-105 active:scale-95 transition"
+                  >
+                    ⚡ Harmonic Mix
+                  </button>
+
+                  <button
+                    onClick={handleExportRekordbox}
+                    className="px-4 py-2 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white hover:scale-105 active:scale-95 transition"
+                  >
+                    Export rekordbox (Hot Cues)
+                  </button>
+
+                  <button
+                    onClick={handleExportM3U8}
+                    className="px-4 py-2 rounded-full border border-white/20 hover:border-white text-xs font-bold text-sp-muted hover:text-white transition"
+                  >
+                    M3U8
+                  </button>
+                </div>
+
+                {/* Right Settings */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value)}
+                    className="bg-white/10 hover:bg-white/15 text-white text-xs font-bold px-3 py-2 rounded-full border-none focus:outline-none cursor-pointer"
+                  >
+                    <option value="MP3" className="bg-sp-card text-white">MP3 320k</option>
+                    <option value="FLAC" className="bg-sp-card text-white">FLAC Lossless</option>
+                    <option value="M4A" className="bg-sp-card text-white">M4A / AAC</option>
+                    <option value="WAV" className="bg-sp-card text-white">WAV</option>
+                  </select>
+
+                  <button
+                    onClick={handleBrowseDir}
+                    title="Change folder"
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs"
+                  >
+                    📁
+                  </button>
+                  <button
+                    onClick={handleOpenFolder}
+                    title="Open in Explorer"
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs"
+                  >
+                    ↗
+                  </button>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="flex-1 overflow-y-auto px-6 py-2">
+                <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-white/10 text-xs font-medium text-sp-muted">
+                  <div className="col-span-1 text-center">#</div>
+                  <div className="col-span-5">Title</div>
+                  <div className="col-span-2">Album / Genre</div>
+                  <div className="col-span-1 text-center font-mono">Key</div>
+                  <div className="col-span-1 text-center font-mono">BPM</div>
+                  <div className="col-span-2 text-right">Energy / Actions</div>
+                </div>
+
+                <div className="py-2 space-y-1">
+                  {tracks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-24 text-sp-muted">
+                      <p className="font-bold text-white text-sm">Your DJ Queue is empty</p>
+                      <p className="text-xs text-sp-subdued mt-1">Paste a Spotify track or playlist URL above</p>
+                    </div>
+                  ) : (
+                    <AnimatePresence>
+                      {tracks.map((t, idx) => (
+                        <motion.div
+                          key={t.id || idx}
+                          layout
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className={`grid grid-cols-12 gap-4 items-center px-4 py-2 rounded-md hover:bg-white/10 group transition ${
+                            activeTrack && activeTrack.id === t.id ? 'bg-white/10 border-l-2 border-sp-green' : ''
+                          }`}
+                        >
+                          {/* Play / Index */}
+                          <div className="col-span-1 text-center text-xs text-sp-muted">
+                            <button
+                              onClick={() => playTrack(t)}
+                              className="text-white hover:text-sp-green"
+                              title="Preview Track"
+                            >
+                              {activeTrack && activeTrack.id === t.id && isPlaying ? '⏸' : '▶'}
+                            </button>
+                          </div>
+
+                          {/* Title & Cover */}
+                          <div className="col-span-5 flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded bg-[#282828] flex-shrink-0 overflow-hidden">
+                              {t.cover_url ? (
+                                <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-xs text-sp-subdued">🎵</div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-semibold truncate ${t.done ? 'text-sp-green' : 'text-white'}`}>
+                                {t.title}
+                              </p>
+                              <p className="text-xs text-sp-muted truncate">
+                                {t.artist || 'Unknown Artist'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Album / Genre */}
+                          <div className="col-span-2 text-xs text-sp-muted truncate">
+                            {t.album || t.genre || '—'}
+                          </div>
+
+                          {/* Camelot Key Pill */}
+                          <div className="col-span-1 text-center">
+                            <button
+                              onClick={() => openWheelForTrack(t.camelot)}
+                              title="Click to view on Camelot Wheel"
+                              className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white transition"
+                            >
+                              {t.camelot || '--'}
+                            </button>
+                          </div>
+
+                          {/* BPM */}
+                          <div className="col-span-1 text-center">
+                            <span className="text-xs font-mono text-sp-muted">
+                              {t.bpm ? Math.round(t.bpm) : '—'}
+                            </span>
+                          </div>
+
+                          {/* Energy & Action Buttons */}
+                          <div className="col-span-2 flex items-center justify-end gap-2 text-xs">
+                            {t.energy && (
+                              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                                ⚡ {t.energy}/10
+                              </span>
+                            )}
+
+                            <button
+                              onClick={() => setEditingTrack({ ...t, index: idx })}
+                              className="text-sp-subdued hover:text-white p-1"
+                              title="Edit Tags"
+                            >
+                              ✏️
+                            </button>
+
+                            <button
+                              disabled={t.done}
+                              onClick={() => convertSingle(idx)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition ${
+                                t.done
+                                  ? 'text-sp-green bg-sp-green/10'
+                                  : 'text-black bg-white hover:bg-sp-green'
+                              }`}
+                            >
+                              {t.done ? '✓' : '↓'}
+                            </button>
+
+                            <button
+                              onClick={() => removeTrack(idx)}
+                              className="text-sp-subdued hover:text-rose-400 p-1"
+                              title="Remove"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </div>
+              </div>
+
+            </main>
+
+          </div>
+
+          {/* Bottom Player Bar (Spotify Official Style) */}
+          <footer className="h-20 bg-[#181818] border-t border-white/10 px-6 flex items-center justify-between text-white z-40">
+            
+            {/* Left Track Thumbnail */}
+            <div className="flex items-center gap-3 w-1/4 min-w-0">
+              {activeTrack ? (
+                <>
+                  <div className="w-12 h-12 rounded bg-[#282828] overflow-hidden flex-shrink-0">
+                    {activeTrack.cover_url ? (
+                      <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">{activeTrack.title}</p>
+                    <p className="text-[11px] text-sp-muted truncate">{activeTrack.artist || 'Unknown'}</p>
+                  </div>
+                </>
+              ) : (
+                <span className="text-xs text-sp-subdued font-mono">No audio playing</span>
+              )}
+            </div>
+
+            {/* Center Controls & Scrubber */}
+            <div className="flex flex-col items-center gap-1.5 w-2/4">
+              <div className="flex items-center gap-4">
+                <button
+                  disabled={!activeTrack}
+                  onClick={togglePlay}
+                  className="w-8 h-8 rounded-full bg-white hover:scale-105 active:scale-95 text-black flex items-center justify-center transition disabled:opacity-40"
+                >
+                  {isPlaying ? '⏸' : '▶'}
+                </button>
+              </div>
+
+              {/* Progress Scrubber */}
+              <div className="w-full max-w-md flex items-center gap-2 text-[11px] font-mono text-sp-muted">
+                <span>{formatTime(currentTime)}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max={duration || 100}
+                  value={currentTime}
+                  onChange={handleSeek}
+                  className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-sp-green"
+                />
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
+
+            {/* Right Volume & Extra info */}
+            <div className="flex items-center justify-end gap-3 w-1/4">
+              <span className="text-xs text-sp-muted">🔊</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={handleVolume}
+                className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-sp-green"
+              />
+              <span className="text-[11px] font-mono text-sp-subdued ml-2">
+                Queue: {tracks.length}
+              </span>
+            </div>
+
+          </footer>
+
+          {/* Toast Notification */}
+          <AnimatePresence>
+            {notification && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                className="fixed top-5 right-6 z-50 px-4 py-2.5 rounded-lg bg-sp-card border border-white/10 text-xs font-semibold text-white shadow-2xl flex items-center gap-2.5"
+              >
+                <span className="w-2 h-2 rounded-full bg-sp-green"></span>
+                <span>{notification.msg}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Camelot Wheel Modal */}
+          {showCamelotModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+              <div className="bg-sp-base border border-white/10 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-white">Interactive Camelot Wheel Visualizer</h2>
+                    <p className="text-xs text-sp-muted">Selected Key: <span className="text-sp-green font-bold">{selectedKeyForWheel}</span></p>
+                  </div>
+                  <button onClick={() => setShowCamelotModal(false)} className="text-sp-muted hover:text-white">✕</button>
+                </div>
+
+                {/* Camelot Grid Matrix */}
+                <div className="grid grid-cols-4 gap-2.5 max-h-96 overflow-y-auto p-1">
+                  {CAMELOT_WHEEL.map((cw) => {
+                    const matchType = isHarmonicMatch(selectedKeyForWheel, cw.key);
+                    const isSelected = selectedKeyForWheel === cw.key;
+                    return (
+                      <div
+                        key={cw.key}
+                        onClick={() => setSelectedKeyForWheel(cw.key)}
+                        style={{ borderColor: isSelected ? '#1DB954' : matchType ? cw.color : 'rgba(255,255,255,0.1)' }}
+                        className={`p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition ${
+                          isSelected ? 'bg-sp-green/20 scale-105' : matchType ? 'bg-white/5' : 'bg-sp-card opacity-60'
+                        }`}
+                      >
+                        <span className="text-sm font-bold font-mono" style={{ color: cw.color }}>
+                          {cw.key}
+                        </span>
+                        <span className="text-[11px] text-sp-muted">{cw.musical}</span>
+                        {matchType && (
+                          <span className="text-[9px] font-mono uppercase mt-1 px-1.5 py-0.5 rounded bg-white/10 text-white">
+                            {matchType === 'exact' ? 'Current' : matchType === 'relative' ? 'Rel Minor/Maj' : matchType === 'neighbor' ? 'Harmonic +1/-1' : 'Energy Boost'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="text-[11px] text-sp-muted flex justify-between pt-2 border-t border-white/10">
+                  <span>💡 Colors indicate Mixed In Key harmonic transitions</span>
+                  <button
+                    onClick={() => setShowCamelotModal(false)}
+                    className="px-4 py-1.5 bg-white text-black font-bold rounded-full text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Tag Editor Modal */}
+          {editingTrack && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+              <form onSubmit={saveEditedTags} className="bg-sp-base border border-white/10 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <h2 className="text-sm font-bold text-white">Edit Track Tags & Metadata</h2>
+                  <button type="button" onClick={() => setEditingTrack(null)} className="text-sp-muted hover:text-white">✕</button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-sp-muted block mb-1">Title</label>
+                    <input
+                      type="text"
+                      value={editingTrack.title || ''}
+                      onChange={(e) => setEditingTrack({ ...editingTrack, title: e.target.value })}
+                      className="w-full bg-sp-card text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sp-muted block mb-1">Artist</label>
+                    <input
+                      type="text"
+                      value={editingTrack.artist || ''}
+                      onChange={(e) => setEditingTrack({ ...editingTrack, artist: e.target.value })}
+                      className="w-full bg-sp-card text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sp-muted block mb-1">Camelot Key</label>
+                      <input
+                        type="text"
+                        value={editingTrack.camelot || ''}
+                        onChange={(e) => setEditingTrack({ ...editingTrack, camelot: e.target.value })}
+                        className="w-full bg-sp-card text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sp-muted block mb-1">BPM</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editingTrack.bpm || ''}
+                        onChange={(e) => setEditingTrack({ ...editingTrack, bpm: parseFloat(e.target.value) })}
+                        className="w-full bg-sp-card text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sp-muted block mb-1">Genre</label>
+                    <input
+                      type="text"
+                      value={editingTrack.genre || ''}
+                      onChange={(e) => setEditingTrack({ ...editingTrack, genre: e.target.value })}
+                      className="w-full bg-sp-card text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTrack(null)}
+                    className="px-4 py-2 bg-sp-card hover:bg-sp-cardHover text-white rounded-full text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-sp-green hover:bg-sp-greenHover text-black rounded-full text-xs font-bold"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
