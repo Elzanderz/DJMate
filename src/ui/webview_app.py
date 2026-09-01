@@ -14,21 +14,30 @@ from ..services.rekordbox_service import RekordboxService
 class DJWebviewApi:
     def __init__(self):
         self.spotify_service = SpotifyService()
-        self.output_dir = os.path.abspath(os.path.join(os.getcwd(), 'downloads'))
+        from ..services.settings_service import SettingsService
+        self.output_dir = SettingsService.get_output_dir()
         os.makedirs(self.output_dir, exist_ok=True)
 
     def get_output_dir(self) -> str:
+        from ..services.settings_service import SettingsService
+        self.output_dir = SettingsService.get_output_dir()
+        return self.output_dir
+
+    def set_output_dir(self, path: str) -> str:
+        from ..services.settings_service import SettingsService
+        from ..services.history_service import HistoryService
+        self.output_dir = SettingsService.set_output_dir(path)
+        HistoryService.sync_downloads_folder(self.output_dir)
         return self.output_dir
 
     def browse_folder(self) -> str:
-        root = Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        folder = filedialog.askdirectory(initialdir=self.output_dir)
-        root.destroy()
-        if folder:
-            self.output_dir = folder
-            return folder
+        from ..services.settings_service import SettingsService
+        from ..services.history_service import HistoryService
+        selected = SettingsService.browse_folder(self.output_dir)
+        if selected:
+            self.output_dir = selected
+            HistoryService.sync_downloads_folder(self.output_dir)
+            return selected
         return self.output_dir
 
     def open_folder(self, path: str = None, playlist_name: str = '') -> bool:

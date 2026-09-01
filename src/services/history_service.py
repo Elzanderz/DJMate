@@ -21,13 +21,23 @@ CAMELOT_COLORS = {
 }
 
 class HistoryService:
-    DB_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'downloads', 'library_history.json'))
+    @classmethod
+    def get_db_file(cls, target_dir: Optional[str] = None) -> str:
+        if target_dir and os.path.exists(target_dir):
+            return os.path.abspath(os.path.join(target_dir, 'library_history.json'))
+        try:
+            from src.services.settings_service import SettingsService
+            active_dir = SettingsService.get_output_dir()
+            return os.path.abspath(os.path.join(active_dir, 'library_history.json'))
+        except Exception:
+            return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'downloads', 'library_history.json'))
 
     @classmethod
-    def _ensure_db(cls):
-        os.makedirs(os.path.dirname(cls.DB_FILE), exist_ok=True)
-        if not os.path.exists(cls.DB_FILE):
-            with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+    def _ensure_db(cls, target_dir: Optional[str] = None):
+        db_file = cls.get_db_file(target_dir)
+        os.makedirs(os.path.dirname(db_file), exist_ok=True)
+        if not os.path.exists(db_file):
+            with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump([], f, ensure_ascii=False, indent=2)
 
     @staticmethod
@@ -211,14 +221,15 @@ class HistoryService:
         4. Discovers and indexes any new audio files on disk with full metadata extraction.
         5. Writes updated library_history.json.
         """
-        cls._ensure_db()
-        folder = os.path.abspath(target_dir) if target_dir else os.path.dirname(cls.DB_FILE)
+        cls._ensure_db(target_dir)
+        db_file = cls.get_db_file(target_dir)
+        folder = os.path.abspath(target_dir) if target_dir else os.path.dirname(db_file)
         if not os.path.exists(folder):
             return []
 
         existing_tracks = []
         try:
-            with open(cls.DB_FILE, 'r', encoding='utf-8') as f:
+            with open(db_file, 'r', encoding='utf-8') as f:
                 existing_tracks = json.load(f)
         except Exception:
             existing_tracks = []
@@ -397,7 +408,7 @@ class HistoryService:
 
         if needs_save or len(updated_list) != len(existing_tracks):
             try:
-                with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+                with open(db_file, 'w', encoding='utf-8') as f:
                     json.dump(updated_list, f, ensure_ascii=False, indent=2)
             except Exception as e:
                 print(f"[HistoryService] Error saving synchronized database: {e}")
@@ -405,22 +416,22 @@ class HistoryService:
         return updated_list
 
     @classmethod
-    def get_all(cls, force_rescan: bool = False) -> List[Dict]:
-        cls._ensure_db()
+    def get_all(cls, force_rescan: bool = False, target_dir: Optional[str] = None) -> List[Dict]:
+        cls._ensure_db(target_dir)
+        db_file = cls.get_db_file(target_dir)
         if force_rescan:
-            return cls.sync_downloads_folder()
+            return cls.sync_downloads_folder(target_dir)
         try:
-            with open(cls.DB_FILE, 'r', encoding='utf-8') as f:
+            with open(db_file, 'r', encoding='utf-8') as f:
                 tracks = json.load(f)
                 return tracks if isinstance(tracks, list) else []
         except Exception:
-            return cls.sync_downloads_folder()
-        except Exception:
-            return cls.sync_downloads_folder()
+            return cls.sync_downloads_folder(target_dir)
 
     @classmethod
     def save_track(cls, track: Dict):
         cls._ensure_db()
+        db_file = cls.get_db_file()
         tracks = cls.get_all()
         filepath = track.get('filepath')
         existing_idx = next((i for i, t in enumerate(tracks) if t.get('filepath') == filepath), None)
@@ -431,7 +442,7 @@ class HistoryService:
             tracks.insert(0, track)
 
         try:
-            with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+            with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(tracks, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"[HistoryService] Error saving track: {e}")
@@ -439,10 +450,11 @@ class HistoryService:
     @classmethod
     def delete_track(cls, filepath: str, delete_file: bool = False) -> bool:
         cls._ensure_db()
+        db_file = cls.get_db_file()
         tracks = cls.get_all()
         tracks = [t for t in tracks if t.get('filepath') != filepath]
         try:
-            with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+            with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(tracks, f, ensure_ascii=False, indent=2)
             if delete_file and filepath and os.path.exists(filepath):
                 os.remove(filepath)
@@ -453,13 +465,14 @@ class HistoryService:
     @classmethod
     def batch_update_tracks(cls, filepaths: List[str], updated_fields: Dict) -> bool:
         cls._ensure_db()
+        db_file = cls.get_db_file()
         tracks = cls.get_all()
         target_fps = set(filepaths)
         for t in tracks:
             if t.get('filepath') in target_fps:
                 t.update(updated_fields)
         try:
-            with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+            with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(tracks, f, ensure_ascii=False, indent=2)
             return True
         except Exception:
@@ -468,6 +481,7 @@ class HistoryService:
     @classmethod
     def batch_delete_tracks(cls, filepaths: List[str], delete_files: bool = False) -> bool:
         cls._ensure_db()
+        db_file = cls.get_db_file()
         tracks = cls.get_all()
         target_fps = set(filepaths)
         remaining = []
@@ -482,7 +496,7 @@ class HistoryService:
             else:
                 remaining.append(t)
         try:
-            with open(cls.DB_FILE, 'w', encoding='utf-8') as f:
+            with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(remaining, f, ensure_ascii=False, indent=2)
             return True
         except Exception:

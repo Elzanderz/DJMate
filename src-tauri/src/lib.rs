@@ -269,7 +269,16 @@ fn open_folder(path: Option<String>, playlist_name: Option<String>, playlistName
 
 #[tauri::command]
 async fn browse_folder() -> Result<Value, String> {
-    get_output_dir().await
+    tauri::async_runtime::spawn_blocking(|| run_bridge("browse_folder", json!({})))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn set_output_dir(path: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || run_bridge("set_output_dir", json!({ "path": path })))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -540,6 +549,7 @@ pub fn run() {
             save_tags,
             open_folder,
             browse_folder,
+            set_output_dir,
             search_music_unified,
             search_local_folder,
             search_online_tracks

@@ -2180,8 +2180,17 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   };
 
   const handleBrowseDir = async () => {
-    const path = await invokeBackend('browse_folder');
-    if (path) setOutputDir(path);
+    try {
+      const res = await invokeBackend('browse_folder');
+      const selectedPath = typeof res === 'string' ? res : (res?.result || res?.path);
+      if (selectedPath) {
+        setOutputDir(selectedPath);
+        showToast(`เปลี่ยนโฟลเดอร์เพลงเป็น: ${selectedPath}`, 'success');
+        refreshLibrary();
+      }
+    } catch (e: any) {
+      showToast('ไม่สามารถเลือกโฟลเดอร์ได้', 'error');
+    }
   };
 
   const handleOpenFolder = () => {
@@ -3499,6 +3508,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     title="Clean duplicates and inspect audio quality"
                   >
                     <span>🧹 Clean Dupes</span>
+                  </button>
+
+                  <button
+                    onClick={handleBrowseDir}
+                    className="px-2.5 py-1.5 rounded-xl bg-[#202026] hover:bg-[#282830] text-amber-300 hover:text-amber-200 text-xs border border-amber-500/20 hover:border-amber-500/40 transition flex items-center gap-1.5 shadow-sm"
+                    title={`โฟลเดอร์เก็บเพลงปัจจุบัน: ${outputDir} (คลิกเพื่อเลือกโฟลเดอร์ในเครื่อง)`}
+                  >
+                    <span>📁</span>
+                    <span className="max-w-[130px] truncate font-medium">{outputDir.split(/[\\/]/).pop() || outputDir}</span>
+                    <span className="text-[10px] text-amber-400 opacity-75">✏️</span>
                   </button>
 
                   <button

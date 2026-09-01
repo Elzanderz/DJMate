@@ -35,12 +35,26 @@ import base64
 
 def handle_command(cmd_name: str, payload: dict) -> dict:
     spotify_service = SpotifyService()
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.abspath(os.path.join(project_root, 'downloads'))
+    from src.services.settings_service import SettingsService
+    output_dir = SettingsService.get_output_dir()
     os.makedirs(output_dir, exist_ok=True)
 
     if cmd_name == 'get_output_dir':
         return {'result': output_dir}
+
+    elif cmd_name == 'set_output_dir':
+        new_dir = payload.get('path', '').strip()
+        saved_dir = SettingsService.set_output_dir(new_dir)
+        from src.services.history_service import HistoryService
+        HistoryService.sync_downloads_folder(saved_dir)
+        return {'result': saved_dir}
+
+    elif cmd_name == 'browse_folder':
+        selected = SettingsService.browse_folder()
+        if selected:
+            from src.services.history_service import HistoryService
+            HistoryService.sync_downloads_folder(selected)
+        return {'result': selected or output_dir}
 
     elif cmd_name == 'open_folder':
         target_path = payload.get('path', '').strip()
