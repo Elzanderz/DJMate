@@ -66,7 +66,22 @@ class DJWebviewApi:
         elif YouTubeMixtapeService.is_youtube_url(url):
             return YouTubeMixtapeService.extract_mixtape_tracks(url)
 
+        from ..services.music_search_service import MusicSearchService
+        if not (url.startswith('http://') or url.startswith('https://') or url.startswith('spotify:')):
+            return MusicSearchService.search_online_tracks(url, limit_per_source=8, check_local=True)
         return self.spotify_service.get_info(url)
+
+    def search_music_unified(self, query: str = '') -> Dict:
+        from ..services.music_search_service import MusicSearchService
+        return MusicSearchService.search_unified(query, base_dir=self.output_dir)
+
+    def search_local_folder(self, query: str = '') -> List[Dict]:
+        from ..services.music_search_service import MusicSearchService
+        return MusicSearchService.search_local_library(query, base_dir=self.output_dir)
+
+    def search_online_tracks(self, query: str = '', limit: int = 10) -> List[Dict]:
+        from ..services.music_search_service import MusicSearchService
+        return MusicSearchService.search_online_tracks(query, limit_per_source=limit, check_local=True)
 
     def harmonic_sort(self, tracks: List[Dict]) -> List[Dict]:
         return DJAnalyzerService.smart_harmonic_sort(tracks)

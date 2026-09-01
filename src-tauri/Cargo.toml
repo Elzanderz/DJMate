@@ -1,6 +1,6 @@
 [package]
 name = "spotify-dj-converter"
-version = "2.0.0"
+version = "1.0.0"
 description = "Spotify Music & DJ Converter - Tauri v2 Edition"
 authors = ["Spotify DJ Suite"]
 edition = "2021"

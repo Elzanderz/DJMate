@@ -38,17 +38,30 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     #[cfg(target_os = "windows")]
     py_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
-    let mut child = py_cmd.spawn().or_else(|_| {
-        let mut fallback = Command::new("python");
-        fallback.arg(&script_path)
-            .env("PYTHONIOENCODING", "utf-8")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(target_os = "windows")]
-        fallback.creation_flags(0x08000000);
-        fallback.spawn()
-    }).map_err(|e| format!("Failed to execute python: {}", e))?;
+    let mut child = py_cmd.spawn()
+        .or_else(|_| {
+            let mut fallback = Command::new("python3");
+            fallback.arg(&script_path)
+                .env("PYTHONIOENCODING", "utf-8")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            #[cfg(target_os = "windows")]
+            fallback.creation_flags(0x08000000);
+            fallback.spawn()
+        })
+        .or_else(|_| {
+            let mut fallback = Command::new("python");
+            fallback.arg(&script_path)
+                .env("PYTHONIOENCODING", "utf-8")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            #[cfg(target_os = "windows")]
+            fallback.creation_flags(0x08000000);
+            fallback.spawn()
+        })
+        .map_err(|e| format!("Failed to execute python: {}", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(req_str.as_bytes()).map_err(|e| e.to_string())?;
@@ -475,6 +488,27 @@ async fn generate_ai_playlist(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn search_music_unified(query: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || run_bridge("search_music_unified", json!({ "query": query })))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn search_local_folder(query: Option<String>) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || run_bridge("search_local_folder", json!({ "query": query.unwrap_or_default() })))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn search_online_tracks(query: String, limit: Option<i64>) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || run_bridge("search_online_tracks", json!({ "query": query, "limit": limit.unwrap_or(10) })))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -505,7 +539,10 @@ pub fn run() {
             get_audio_data_url,
             save_tags,
             open_folder,
-            browse_folder
+            browse_folder,
+            search_music_unified,
+            search_local_folder,
+            search_online_tracks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

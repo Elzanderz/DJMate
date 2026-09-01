@@ -28,6 +28,7 @@ from src.services.youtube_mixtape_service import YouTubeMixtapeService
 from src.services.music_sources_service import SoundCloudService, AppleMusicService
 from src.services.ai_curator_service import AICuratorService
 from src.services.dj_exporters import DJExportersService
+from src.services.music_search_service import MusicSearchService
 import subprocess
 import re
 import base64
@@ -78,16 +79,25 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         from src.services.youtube_mixtape_service import YouTubeMixtapeService
         from src.services.music_sources_service import SoundCloudService, AppleMusicService
         from src.services.history_service import HistoryService
-        if BeatportService.is_beatport_url(url):
-            tracks = BeatportService.get_info(url)
-        elif SoundCloudService.is_soundcloud_url(url):
-            tracks = SoundCloudService.get_info(url)
-        elif AppleMusicService.is_applemusic_url(url):
-            tracks = AppleMusicService.get_info(url)
-        elif YouTubeMixtapeService.is_youtube_url(url):
-            tracks = YouTubeMixtapeService.extract_mixtape_tracks(url)
+        from src.services.music_search_service import MusicSearchService
+
+        is_url = url.startswith('http://') or url.startswith('https://') or url.startswith('spotify:')
+        if is_url:
+            if BeatportService.is_beatport_url(url):
+                tracks = BeatportService.get_info(url)
+            elif SoundCloudService.is_soundcloud_url(url):
+                tracks = SoundCloudService.get_info(url)
+            elif AppleMusicService.is_applemusic_url(url):
+                tracks = AppleMusicService.get_info(url)
+            elif YouTubeMixtapeService.is_youtube_url(url):
+                tracks = YouTubeMixtapeService.extract_mixtape_tracks(url)
+            else:
+                tracks = spotify_service.get_info(url)
         else:
-            tracks = spotify_service.get_info(url)
+            # Smart multi-source online search for keywords / song name
+            tracks = MusicSearchService.search_online_tracks(url, limit_per_source=8, check_local=True)
+            if not tracks:
+                tracks = spotify_service.get_info(url)
         
         # Deduplication check: mark tracks already present in local library
         tracks = HistoryService.mark_existing_tracks(tracks)
@@ -275,6 +285,25 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         from src.services.history_service import HistoryService
         results = HistoryService.mark_existing_tracks(results)
         return {'result': results}
+
+    elif cmd_name == 'search_music_unified':
+        query = payload.get('query', '')
+        from src.services.music_search_service import MusicSearchService
+        res = MusicSearchService.search_unified(query, base_dir=output_dir)
+        return {'result': res}
+
+    elif cmd_name == 'search_local_folder':
+        query = payload.get('query', '')
+        from src.services.music_search_service import MusicSearchService
+        res = MusicSearchService.search_local_library(query, base_dir=output_dir)
+        return {'result': res}
+
+    elif cmd_name == 'search_online_tracks':
+        query = payload.get('query', '')
+        limit = int(payload.get('limit', 10))
+        from src.services.music_search_service import MusicSearchService
+        res = MusicSearchService.search_online_tracks(query, limit_per_source=limit, check_local=True)
+        return {'result': res}
 
     elif cmd_name == 'harmonic_sort':
         tracks = payload.get('tracks', [])

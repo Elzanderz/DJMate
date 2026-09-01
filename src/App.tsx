@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
+import { SmartSearchModal } from './ui/SmartSearchModal';
+
+// Robust Thai & International text normalization helper
+export function normalizeThaiString(str: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[\u0E48-\u0E4C\u0E47\u0E4D\u0E4E\u0E3A]/g, '')
+    .replace(/[^\w\s\u0E00-\u0E7F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // Tauri v2 & Webview Unified Bridge
 async function invokeBackend(command: string, args: any = {}): Promise<any> {
@@ -197,6 +210,25 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.85);
+  const [prevVolume, setPrevVolume] = useState(0.85);
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Right-Click Context Menu State (ระบบคลิกขวา)
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    track: Track | null;
+    source?: 'queue' | 'library' | 'mixtape' | 'recommendation' | 'yt_extractor' | 'drawer' | 'player' | 'general';
+    index?: number;
+    playlistContext?: Track[];
+  }>({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    track: null,
+    source: 'general',
+  });
 
   // Dual-Deck Pro DJ Audio Engine (Seamless Equal-Power Crossfading)
   const deckARef = useRef<HTMLAudioElement>(new Audio());
@@ -247,6 +279,10 @@ export default function App() {
   // Mixtape Set Export Modal
   const [showExportSetModal, setShowExportSetModal] = useState(false);
   const [exportSetCopyAudio, setExportSetCopyAudio] = useState(false);
+
+  // Smart Search Modal State
+  const [showSmartSearchModal, setShowSmartSearchModal] = useState(false);
+  const [smartSearchInitialQuery, setSmartSearchInitialQuery] = useState('');
 
   // AI DJ Prompt Assistant Modal State
   const [showAiModal, setShowAiModal] = useState(false);
@@ -420,6 +456,13 @@ export default function App() {
   activeTrackRef.current = activeTrack;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+  const libTableScrollRef = useRef<HTMLDivElement>(null);
+
+  const getEffectiveVolume = () => (isMutedRef.current ? 0 : volumeRef.current);
 
   const getCurrentDeck = () => (activeDeckRef.current === 'A' ? deckARef.current : deckBRef.current);
   const getStandbyDeck = () => (activeDeckRef.current === 'A' ? deckBRef.current : deckARef.current);
@@ -433,6 +476,12 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (libTableScrollRef.current) {
+      libTableScrollRef.current.scrollTop = 0;
+    }
+  }, [libFilterPlaylist, libSearch, libFilterGenre, libFilterKey, libFilterStars]);
+
+  useEffect(() => {
     invokeBackend('get_output_dir').then((res) => {
       if (res) setOutputDir(res);
     });
@@ -441,12 +490,13 @@ export default function App() {
 
     const deckA = deckARef.current;
     const deckB = deckBRef.current;
-    deckA.volume = volume;
+    deckA.volume = getEffectiveVolume();
     deckB.volume = 0;
 
     const setupDeckListeners = (deck: HTMLAudioElement, deckId: 'A' | 'B') => {
       const onTime = () => {
-        if (activeDeckRef.current === deckId) {
+        // Strictly only accept time updates from the currently active deck
+        if (activeDeckRef.current === deckId && !deck.paused) {
           setCurrentTime(deck.currentTime);
 
           // Auto-DJ seamless pre-end crossfade (starts 4.5s before song finishes)
@@ -463,8 +513,8 @@ export default function App() {
       };
 
       const onMeta = () => {
-        if (activeDeckRef.current === deckId) {
-          setDuration(deck.duration || 0);
+        if (activeDeckRef.current === deckId && deck.duration) {
+          setDuration(deck.duration);
         }
       };
 
@@ -515,8 +565,9 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   const barRef = useRef<HTMLDivElement>(null);
 
   const totalDuration = duration > 0 ? duration : (track?.duration_ms ? track.duration_ms / 1000 : 180);
-  const displayTime = isDragging && dragTime !== null ? dragTime : currentTime;
-  const progressPct = Math.min(100, Math.max(0, (displayTime / totalDuration) * 100));
+  const safeTime = Math.max(0, Math.min(currentTime, totalDuration));
+  const displayTime = isDragging && dragTime !== null ? dragTime : safeTime;
+  const progressPct = totalDuration > 0 ? Math.min(100, Math.max(0, (displayTime / totalDuration) * 100)) : 0;
 
   const bpm = Number(track?.bpm || 128);
   const secPerBeat = 60.0 / Math.max(60, bpm);
@@ -844,13 +895,30 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     showToast('Up Next Queue cleared', 'info');
   };
 
-  const handleAddAllMixtapeToQueue = () => {
+  const handleAddMultipleToQueue = (tracksToAdd: Track[], playImmediately: boolean = false) => {
+    if (!tracksToAdd || tracksToAdd.length === 0) {
+      showToast('กรุณาเลือกเพลงก่อน', 'info');
+      return;
+    }
+    if (playImmediately) {
+      const [first, ...rest] = tracksToAdd;
+      playTrack(first, tracksToAdd, false);
+      if (rest.length > 0) {
+        setPlayQueue((prev) => [...prev, ...rest]);
+      }
+      showToast(`▶ เริ่มเล่น "${first.title}" และเพิ่มอีก ${rest.length} เพลงลงคิวแล้ว!`, 'success');
+    } else {
+      setPlayQueue((prev) => [...prev, ...tracksToAdd]);
+      showToast(`📑 เพิ่ม ${tracksToAdd.length} เพลงลงในคิวเล่นต่อ (Up Next Queue) แล้ว!`, 'success');
+    }
+  };
+
+  const handleAddAllMixtapeToQueue = (playImmediately: boolean = false) => {
     if (mixtapeTracks.length === 0) {
       showToast('Smart Mixtape is empty. Generate a set first!', 'info');
       return;
     }
-    setPlayQueue((prev) => [...prev, ...mixtapeTracks]);
-    showToast(`✓ Added all ${mixtapeTracks.length} Mixtape tracks into Up Next Queue!`, 'success');
+    handleAddMultipleToQueue(mixtapeTracks, playImmediately);
   };
 
   const isSameTrack = (a?: Track | null, b?: Track | null) => {
@@ -872,6 +940,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
     const currentDeck = getCurrentDeck();
     const standbyDeck = getStandbyDeck();
+    const effectiveVol = getEffectiveVolume();
 
     // If tapping on currently active song, toggle pause
     if (isSameTrack(activeTrackRef.current, t) && isPlayingRef.current && !isCrossfadingRef.current) {
@@ -895,40 +964,47 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     if (isPlayingRef.current && forceSmooth && currentDeck.src && !currentDeck.paused && currentDeck.currentTime > 0.5) {
       stopCrossfade();
 
-      standbyDeck.src = dataUrl;
-      standbyDeck.currentTime = 0;
-      standbyDeck.volume = 0;
+      const oldDeck = currentDeck;
+      const newDeck = standbyDeck;
+      // Immediately switch active deck to the new incoming deck
+      activeDeckRef.current = activeDeckRef.current === 'A' ? 'B' : 'A';
+
+      newDeck.src = dataUrl;
+      newDeck.currentTime = 0;
+      newDeck.volume = 0;
 
       try {
-        await standbyDeck.play();
+        await newDeck.play();
       } catch (err) {
         console.error("Audio playback error", err);
       }
 
+      setCurrentTime(0);
+      setDuration(t.duration_ms ? t.duration_ms / 1000 : (newDeck.duration || 0));
       setActiveTrack(t);
       setIsPlaying(true);
       isCrossfadingRef.current = true;
 
       const startTime = performance.now();
       const durMs = CROSSFADE_TIME * 1000;
-      const targetVol = volume;
 
       crossfadeTimerRef.current = setInterval(() => {
         const elapsed = performance.now() - startTime;
         const progress = Math.min(1.0, elapsed / durMs);
 
-        const volOut = targetVol * Math.cos(progress * 0.5 * Math.PI);
-        const volIn = targetVol * Math.sin(progress * 0.5 * Math.PI);
+        const currentTargetVol = getEffectiveVolume();
+        const volOut = currentTargetVol * Math.cos(progress * 0.5 * Math.PI);
+        const volIn = currentTargetVol * Math.sin(progress * 0.5 * Math.PI);
 
-        currentDeck.volume = Math.max(0, Math.min(1, volOut));
-        standbyDeck.volume = Math.max(0, Math.min(1, volIn));
+        oldDeck.volume = Math.max(0, Math.min(1, volOut));
+        newDeck.volume = Math.max(0, Math.min(1, volIn));
 
         if (progress >= 1.0) {
           stopCrossfade();
-          currentDeck.pause();
-          currentDeck.currentTime = 0;
-          standbyDeck.volume = targetVol;
-          activeDeckRef.current = activeDeckRef.current === 'A' ? 'B' : 'A';
+          oldDeck.pause();
+          oldDeck.currentTime = 0;
+          oldDeck.volume = 0;
+          newDeck.volume = getEffectiveVolume();
         }
       }, 40);
 
@@ -938,10 +1014,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     // 2. Direct Start Playback (Instant switch for manual clicks / Next / Prev)
     stopCrossfade();
     currentDeck.pause();
+    currentDeck.currentTime = 0;
+    standbyDeck.pause();
+    standbyDeck.currentTime = 0;
+    standbyDeck.volume = 0;
+
     currentDeck.src = dataUrl;
     currentDeck.currentTime = 0;
-    currentDeck.volume = volume;
+    currentDeck.volume = effectiveVol;
     setCurrentTime(0);
+    setDuration(t.duration_ms ? t.duration_ms / 1000 : 0);
     setActiveTrack(t);
     setIsPlaying(true);
 
@@ -1037,6 +1119,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   const handlePlayNext = (smooth: boolean | React.MouseEvent = false) => {
     const isSmooth = typeof smooth === 'boolean' ? smooth : false;
 
+    // 1. Repeat Single Track Mode
     if (repeatModeRef.current === 'one' && activeTrackRef.current) {
       const cur = getCurrentDeck();
       cur.currentTime = 0;
@@ -1045,7 +1128,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       return;
     }
 
-    // 1. Check User's Manual Up Next Queue
+    // 2. Priority 1: User's Manual Up Next Queue (เล่นตามคิวที่ผู้ใช้เพิ่มไว้ก่อนเสมอแบบเรียงลำดับ)
     if (playQueueRef.current.length > 0) {
       const nextTrack = playQueueRef.current[0];
       setPlayQueue((prev) => prev.slice(1));
@@ -1053,15 +1136,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       return;
     }
 
-    // 2. Check Smart Auto-DJ Mode (when auto-triggered at song end)
-    if (isAutoDjEnabledRef.current && smartRecommendations.length > 0 && isSmooth) {
-      const nextHarmonic = smartRecommendations[0].track;
-      playTrack(nextHarmonic, undefined, isSmooth);
-      showToast(`🤖 Auto-DJ mixed into "${nextHarmonic.title}" (${nextHarmonic.camelot} • ${Math.round(nextHarmonic.bpm || 128)} BPM)`, 'success');
-      return;
-    }
-
-    // 3. Sequential active playlist or fallback library
+    // 3. Priority 2: Active Playlist / Folder / Mixtape (เล่นเรียงตามลำดับในโฟลเดอร์/เพลย์ลิสต์)
     let list = activePlaybackListRef.current.length > 0
       ? activePlaybackListRef.current
       : (mixtapeTracks.length > 0 ? mixtapeTracks : (libraryTracksRef.current.length > 0 ? libraryTracksRef.current : tracksRef.current));
@@ -1076,14 +1151,37 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
     if (list.length === 0) return;
 
+    // If Shuffle mode is explicitly enabled
     if (isShuffleRef.current) {
-      const randomIdx = Math.floor(Math.random() * list.length);
+      let randomIdx = Math.floor(Math.random() * list.length);
+      if (list.length > 1 && randomIdx === curIdx) {
+        randomIdx = (randomIdx + 1) % list.length;
+      }
       playTrack(list[randomIdx], list, isSmooth);
       return;
     }
 
-    const nextIdx = curIdx >= 0 ? (curIdx + 1) % list.length : 0;
-    playTrack(list[nextIdx], list, isSmooth);
+    // Normal Sequential Playback: Play Next Track in order (เพลง 1 -> 2 -> 3 -> 4...)
+    if (curIdx >= 0 && curIdx < list.length - 1) {
+      playTrack(list[curIdx + 1], list, isSmooth);
+      return;
+    }
+
+    // 4. End of Playlist Reached: Check Repeat All or Auto-DJ Transition
+    if (repeatModeRef.current === 'all') {
+      playTrack(list[0], list, isSmooth);
+      return;
+    }
+
+    if (isAutoDjEnabledRef.current && smartRecommendations.length > 0 && isSmooth) {
+      const nextHarmonic = smartRecommendations[0].track;
+      playTrack(nextHarmonic, undefined, isSmooth);
+      showToast(`🤖 Auto-DJ mixed into "${nextHarmonic.title}" (${nextHarmonic.camelot} • ${Math.round(nextHarmonic.bpm || 128)} BPM)`, 'success');
+      return;
+    }
+
+    // Default loop to beginning of list
+    playTrack(list[0], list, isSmooth);
   };
 
   const handlePlayPrev = () => {
@@ -1111,14 +1209,133 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     playTrack(list[prevIdx], list, false);
   };
 
-  const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setVolume(val);
+  const applyVolume = (val: number) => {
+    const clamped = Math.max(0, Math.min(1, val));
+    setVolume(clamped);
+    volumeRef.current = clamped;
+    if (clamped > 0) {
+      setIsMuted(false);
+      isMutedRef.current = false;
+      setPrevVolume(clamped);
+    } else {
+      setIsMuted(true);
+      isMutedRef.current = true;
+    }
     if (!isCrossfadingRef.current) {
-      deckARef.current.volume = activeDeckRef.current === 'A' ? val : 0;
-      deckBRef.current.volume = activeDeckRef.current === 'B' ? val : 0;
+      deckARef.current.volume = activeDeckRef.current === 'A' ? clamped : 0;
+      deckBRef.current.volume = activeDeckRef.current === 'B' ? clamped : 0;
     }
   };
+
+  const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
+    applyVolume(parseFloat(e.target.value));
+  };
+
+  const toggleMute = () => {
+    if (isMuted || volume === 0) {
+      const restored = prevVolume > 0 ? prevVolume : 0.8;
+      applyVolume(restored);
+      showToast(`🔊 Volume restored to ${Math.round(restored * 100)}%`, 'info');
+    } else {
+      setPrevVolume(volume);
+      applyVolume(0);
+      showToast('🔇 Audio Muted', 'info');
+    }
+  };
+
+  const changeVolumeStep = (delta: number) => {
+    const next = Math.max(0, Math.min(1, Math.round((volume + delta) * 20) / 20));
+    applyVolume(next);
+  };
+
+  const handleOpenContextMenu = (
+    e: React.MouseEvent,
+    track?: Track | null,
+    source: 'queue' | 'library' | 'mixtape' | 'recommendation' | 'yt_extractor' | 'drawer' | 'player' | 'general' = 'general',
+    index?: number,
+    playlistContext?: Track[]
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const menuWidth = 270;
+    const menuHeight = track ? 420 : 280;
+
+    let posX = e.clientX;
+    let posY = e.clientY;
+
+    if (posX + menuWidth > window.innerWidth) {
+      posX = Math.max(10, window.innerWidth - menuWidth - 10);
+    }
+    if (posY + menuHeight > window.innerHeight) {
+      posY = Math.max(10, window.innerHeight - menuHeight - 10);
+    }
+
+    setContextMenu({
+      isOpen: true,
+      x: posX,
+      y: posY,
+      track: track || null,
+      source,
+      index,
+      playlistContext,
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu((prev) => (prev.isOpen ? { ...prev, isOpen: false } : prev));
+  };
+
+  const handleRateFromContextMenu = async (stars: number) => {
+    if (!contextMenu.track) return;
+    const targetTrack = contextMenu.track;
+    if (targetTrack.filepath) {
+      await invokeBackend('batch_update_tracks', {
+        filepaths: [targetTrack.filepath],
+        updated_fields: { stars, rating_255: stars * 51 },
+      });
+      refreshLibrary();
+    }
+    showToast(`⭐ ให้คะแนน ${stars} ดาว สำหรับ "${targetTrack.title}"`, 'success');
+    closeContextMenu();
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      closeContextMenu();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setSmartSearchInitialQuery(url.trim() || libSearch.trim() || '');
+        setShowSmartSearchModal(true);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        closeContextMenu();
+      }
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea') return;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        changeVolumeStep(0.05);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        changeVolumeStep(-0.05);
+      } else if (e.key === 'm' || e.key === 'M') {
+        toggleMute();
+      }
+    };
+
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [volume, isMuted, prevVolume]);
 
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return '0:00';
@@ -1693,11 +1910,11 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           folderPath = track.filepath;
         }
       }
-      const pName = track.playlist_name || '';
+      const pName = getTrackFolderName(track);
       await invokeBackend('open_folder', {
         path: folderPath,
-        playlist_name: pName,
-        playlistName: pName,
+        playlist_name: pName !== 'Singles' ? pName : '',
+        playlistName: pName !== 'Singles' ? pName : '',
       });
       showToast(`📁 เปิดโฟลเดอร์ "${pName || 'Downloads'}" ในเครื่องแล้ว`, 'info');
     } catch (err) {
@@ -1821,6 +2038,28 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     showToast(`Deleted ${filepaths.length} tracks`, 'info');
   };
 
+  // Helper to reliably extract folder name from playlist_name, filepath, or source
+  const getTrackFolderName = (t?: Track | null): string => {
+    if (!t) return 'Singles';
+    if (t.playlist_name && t.playlist_name.trim() && !['singles', 'all', 'library', 'playlist'].includes(t.playlist_name.trim().toLowerCase())) {
+      return t.playlist_name.trim();
+    }
+    if (t.filepath) {
+      const normalized = t.filepath.replace(/\\/g, '/');
+      const parts = normalized.split('/');
+      if (parts.length >= 2) {
+        const folderName = parts[parts.length - 2]?.trim();
+        if (folderName && !['downloads', 'music convertor', 'dj_usb_export', 'dj_gig_storage', 'scratch'].includes(folderName.toLowerCase())) {
+          return folderName;
+        }
+      }
+    }
+    if (t.source && !['Library', 'Playlist', 'Singles', 'All'].includes(t.source)) {
+      return t.source;
+    }
+    return 'Singles';
+  };
+
   // Direct USB / DJ Drive Export
   const [exportSourceMode, setExportSourceMode] = useState<string>('all');
   const [exportStructureMode, setExportStructureMode] = useState<'by_playlist' | 'by_gig_crates' | 'direct'>('by_playlist');
@@ -1828,7 +2067,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   const uniquePlaylistsWithCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     libraryTracks.forEach(t => {
-      const p = t.playlist_name || (t.source && t.source !== 'Library' ? t.source : 'Singles');
+      const p = getTrackFolderName(t);
       counts[p] = (counts[p] || 0) + 1;
     });
     return Object.entries(counts).map(([name, count]) => ({ name, count }));
@@ -1884,7 +2123,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       exportTitle = 'All Playlists';
     } else {
       // Specific playlist name
-      target = libraryTracks.filter(t => (t.playlist_name || 'Singles') === exportSourceMode);
+      target = libraryTracks.filter(t => getTrackFolderName(t) === exportSourceMode);
       exportTitle = exportSourceMode;
     }
 
@@ -1983,10 +2222,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   const uniquePlaylists = useMemo(() => {
     const set = new Set<string>();
     libraryTracks.forEach((t) => {
-      if (t.playlist_name) set.add(t.playlist_name);
-      else if (t.source && t.source !== 'Library') set.add(t.source);
+      const p = getTrackFolderName(t);
+      if (p && p !== 'Singles') set.add(p);
     });
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [libraryTracks]);
 
   const playlistDetailedList = useMemo(() => {
@@ -2002,7 +2241,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     }> = {};
 
     libraryTracks.forEach((t) => {
-      const p = t.playlist_name || (t.source && t.source !== 'Library' ? t.source : 'Singles');
+      const p = getTrackFolderName(t);
       if (!map[p]) {
         map[p] = {
           tracks: [],
@@ -2118,18 +2357,38 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
   const filteredLibrary = useMemo(() => {
     return libraryTracks.filter((t) => {
-      const matchSearch =
-        (t.title || '').toLowerCase().includes(libSearch.toLowerCase()) ||
-        (t.artist || '').toLowerCase().includes(libSearch.toLowerCase()) ||
-        (t.album || '').toLowerCase().includes(libSearch.toLowerCase()) ||
-        (t.playlist_name || '').toLowerCase().includes(libSearch.toLowerCase());
+      let matchSearch = true;
+      if (libSearch.trim()) {
+        const qRaw = libSearch.toLowerCase().trim();
+        const qNorm = normalizeThaiString(libSearch);
+        const tokensRaw = qRaw.split(/\s+/).filter(Boolean);
+        const tokensNorm = qNorm ? qNorm.split(/\s+/).filter(Boolean) : [];
+
+        const combined = `${t.title || ''} ${t.artist || ''} ${t.album || ''} ${t.playlist_name || ''} ${t.genre || ''} ${t.camelot || ''} ${t.bpm || ''} ${t.year || ''}`;
+        const combRaw = combined.toLowerCase();
+        const combNorm = normalizeThaiString(combined);
+
+        if (combRaw.includes(qRaw) || (qNorm && combNorm.includes(qNorm))) {
+          matchSearch = true;
+        } else if (tokensRaw.length > 1) {
+          matchSearch = tokensRaw.every((tok, i) => {
+            const tokN = tokensNorm[i] || normalizeThaiString(tok);
+            return combRaw.includes(tok) || (tokN && combNorm.includes(tokN));
+          });
+        } else {
+          matchSearch = false;
+        }
+      }
       const matchKey = libFilterKey === 'ALL' || t.camelot === libFilterKey;
       const matchStars = libFilterStars === 'ALL' || t.stars === libFilterStars;
       const matchGenre = libFilterGenre === 'ALL' || (t.genre || '').toLowerCase().includes(libFilterGenre.toLowerCase());
+      
+      const trackFolder = getTrackFolderName(t);
       const matchPlaylist =
         libFilterPlaylist === 'ALL' ||
-        t.playlist_name === libFilterPlaylist ||
-        t.source === libFilterPlaylist;
+        trackFolder.toLowerCase() === libFilterPlaylist.trim().toLowerCase() ||
+        (t.playlist_name && t.playlist_name.trim().toLowerCase() === libFilterPlaylist.trim().toLowerCase());
+
       return matchSearch && matchKey && matchStars && matchGenre && matchPlaylist;
     });
   }, [libraryTracks, libSearch, libFilterKey, libFilterStars, libFilterGenre, libFilterPlaylist]);
@@ -2158,7 +2417,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#0e0e11] text-zinc-200 select-none overflow-hidden font-sans">
+    <div
+      onContextMenu={(e) => handleOpenContextMenu(e, null, 'general')}
+      className="flex h-screen w-screen bg-[#0e0e11] text-zinc-200 select-none overflow-hidden font-sans"
+    >
       
       {/* ================= LEFT SIDEBAR (Workly / macOS Style) ================= */}
       <aside className="w-64 bg-[#141417] border-r border-white/5 flex flex-col p-4 flex-shrink-0 z-20">
@@ -2181,7 +2443,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         </div>
 
         {/* Global Search Bar */}
-        <div className="relative mb-5">
+        <div className="relative mb-3">
           <div className="absolute left-3 top-2.5 text-zinc-500">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -2191,15 +2453,50 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-            placeholder="Search, Spotify or Beatport URL..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = url.trim();
+                const isUrl = val.startsWith('http://') || val.startsWith('https://') || val.startsWith('spotify:');
+                if (isUrl) {
+                  handleAnalyze();
+                } else if (val) {
+                  setSmartSearchInitialQuery(val);
+                  setShowSmartSearchModal(true);
+                }
+              }
+            }}
+            placeholder="ค้นหาเพลง / URL..."
             className="w-full bg-[#1b1b1f] hover:bg-[#202024] focus:bg-[#1b1b1f] text-xs text-white pl-8 pr-12 py-2 rounded-xl border border-white/5 focus:border-indigo-500/50 focus:outline-none transition shadow-inner font-medium placeholder:text-zinc-500"
           />
-          <div className="absolute right-2 top-2 flex items-center gap-1">
-            <span className="text-[10px] font-mono bg-[#28282d] text-zinc-400 px-1.5 py-0.5 rounded border border-white/5">
+          <button
+            onClick={() => {
+              setSmartSearchInitialQuery(url.trim());
+              setShowSmartSearchModal(true);
+            }}
+            className="absolute right-2 top-2 flex items-center gap-1 cursor-pointer hover:opacity-80 transition"
+            title="กดเพื่อเปิดค้นหาเพลงอัจฉริยะ (Ctrl+F)"
+          >
+            <span className="text-[10px] font-mono bg-[#28282d] hover:bg-indigo-600/40 hover:text-indigo-200 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5 transition">
               ⌘ F
             </span>
+          </button>
+        </div>
+
+        {/* Dedicated Smart Search Button */}
+        <div
+          onClick={() => {
+            setSmartSearchInitialQuery(url.trim());
+            setShowSmartSearchModal(true);
+          }}
+          className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent hover:from-indigo-500/25 hover:via-purple-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 transition shadow-sm mb-4"
+        >
+          <div className="flex items-center gap-2.5 text-xs font-bold">
+            <span className="text-sm">🔍</span>
+            <span>Smart Search (ค้นหาเพลง)</span>
           </div>
+          <span className="text-[9px] font-mono font-bold bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded">
+            เพลงในเครื่อง / โหลดเพิ่ม
+          </span>
         </div>
 
         {/* Navigation Items */}
@@ -2525,15 +2822,37 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     type="text"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-                    placeholder="Paste YouTube / Spotify / Beatport / SoundCloud / Apple Music URL or Song Name..."
-                    className="flex-1 bg-[#101013] text-white text-xs px-4 py-2.5 rounded-xl border border-white/10 focus:border-indigo-500/50 focus:outline-none transition shadow-inner"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = url.trim();
+                        const isUrl = val.startsWith('http://') || val.startsWith('https://') || val.startsWith('spotify:');
+                        if (isUrl) {
+                          handleAnalyze();
+                        } else if (val) {
+                          setSmartSearchInitialQuery(val);
+                          setShowSmartSearchModal(true);
+                        }
+                      }
+                    }}
+                    placeholder="วางลิงก์ YouTube / Spotify / Beatport หรือพิมพ์ชื่อเพลงไทย-สากลเพื่อค้นหา..."
+                    className="flex-1 bg-[#101013] text-white text-xs px-4 py-2.5 rounded-xl border border-white/10 focus:border-indigo-500/50 focus:outline-none transition shadow-inner font-medium placeholder:text-zinc-500"
                   />
                   <button
                     onClick={handlePaste}
                     className="px-3 py-2.5 bg-[#202026] hover:bg-[#282830] text-zinc-300 hover:text-white rounded-xl text-xs font-semibold transition"
                   >
                     Paste
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSmartSearchInitialQuery(url.trim());
+                      setShowSmartSearchModal(true);
+                    }}
+                    className="px-3.5 py-2.5 bg-gradient-to-r from-indigo-600/30 to-purple-600/30 hover:from-indigo-600/50 hover:to-purple-600/50 text-indigo-200 hover:text-white border border-indigo-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg active:scale-95 whitespace-nowrap"
+                    title="ค้นหาเพลงในเครื่องและออนไลน์ (Ctrl+F)"
+                  >
+                    <span>🔍</span>
+                    <span>ค้นหาเพลง</span>
                   </button>
                   <button
                     disabled={isAnalyzing}
@@ -2557,6 +2876,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 <div className="flex items-center gap-2.5">
                   {selectedIndices.length > 0 && (
                     <>
+                      <button
+                        onClick={() => handleAddMultipleToQueue(selectedIndices.map(i => tracks[i]).filter(Boolean), false)}
+                        className="px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
+                        title="เพิ่มเพลงที่เลือกลงในเครื่องเล่น (Up Next Queue)"
+                      >
+                        <span>📑 + ลงคิว ({selectedIndices.length})</span>
+                      </button>
+
                       <button
                         disabled={isConvertingAll}
                         onClick={handleConvertSelected}
@@ -2650,6 +2977,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
+                          onContextMenu={(e) => handleOpenContextMenu(e, t, 'queue', idx, tracks)}
                           className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
                             isSameTrack(activeTrack, t) ? 'bg-indigo-500/10 border-indigo-500/30' : ''
                           }`}
@@ -2865,6 +3193,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     ytExtractedTracks.map((t, idx) => (
                       <div
                         key={t.id || idx}
+                        onContextMenu={(e) => handleOpenContextMenu(e, t, 'yt_extractor', idx, ytExtractedTracks)}
                         className="grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition"
                       >
                         <div className="col-span-1 text-center text-xs font-mono font-bold text-red-400">
@@ -2921,17 +3250,35 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               
               {/* Filter & Action Toolbar */}
               <div className="p-4 border-b border-white/5 bg-[#18181c]/50 flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex-1 min-w-[200px] max-w-sm relative flex items-center">
+                <div className="flex-1 min-w-[200px] max-w-md relative flex items-center">
                   <input
                     type="text"
                     value={libSearch}
                     onChange={(e) => setLibSearch(e.target.value)}
-                    placeholder={`Search in ${libraryTracks.length} tracks...`}
-                    className="w-full bg-[#101013] text-white text-xs pl-4 pr-8 py-2 rounded-xl border border-white/10 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && libSearch.trim()) {
+                        setSmartSearchInitialQuery(libSearch.trim());
+                        setShowSmartSearchModal(true);
+                      }
+                    }}
+                    placeholder={`ค้นหาในคลังเพลง (${libraryTracks.length} เพลง)...`}
+                    className="w-full bg-[#101013] text-white text-xs pl-4 pr-24 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-indigo-500 transition"
                   />
-                  {libSearch && (
-                    <button onClick={() => setLibSearch('')} className="absolute right-2.5 text-zinc-500 hover:text-white text-xs">✕</button>
-                  )}
+                  <div className="absolute right-2 flex items-center gap-1">
+                    {libSearch && (
+                      <button onClick={() => setLibSearch('')} className="text-zinc-500 hover:text-white text-xs px-1">✕</button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSmartSearchInitialQuery(libSearch.trim());
+                        setShowSmartSearchModal(true);
+                      }}
+                      className="text-[10px] font-bold bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 px-2 py-0.5 rounded-lg border border-indigo-500/30 transition shadow-sm"
+                      title="ค้นหาออนไลน์เพื่อดาวน์โหลดเพลงใหม่ (Smart Search)"
+                    >
+                      🌐 ค้นหาออนไลน์
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -2969,7 +3316,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     >
                       <option value="ALL">📁 All Playlists / Folders ({libraryTracks.length})</option>
                       {uniquePlaylists.map((p) => {
-                        const count = libraryTracks.filter((t) => t.playlist_name === p || t.source === p).length;
+                        const count = libraryTracks.filter((t) => getTrackFolderName(t) === p).length;
                         return (
                           <option key={p} value={p}>
                             📁 {p} ({count})
@@ -3040,6 +3387,22 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       </select>
 
                       <button
+                        onClick={() => handleAddMultipleToQueue(selectedLibIndices.map(i => filteredLibrary[i]).filter(Boolean), true)}
+                        className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow transition flex items-center gap-1 active:scale-95"
+                        title="เล่นเพลงแรกที่เลือกทันทีและเพิ่มเพลงที่เหลือลงในคิวเล่นต่อ"
+                      >
+                        <span>▶ เล่นที่เลือก</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleAddMultipleToQueue(selectedLibIndices.map(i => filteredLibrary[i]).filter(Boolean), false)}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white font-bold text-xs border border-indigo-500/40 shadow transition flex items-center gap-1 active:scale-95"
+                        title="เพิ่มเพลงที่เลือกทั้งหมดลงในคิวเล่นต่อ (Up Next Queue)"
+                      >
+                        <span>📑 + ลงคิว ({selectedLibIndices.length})</span>
+                      </button>
+
+                      <button
                         disabled={isNormalizingBatch}
                         onClick={() => handleBatchNormalize(true)}
                         className="px-2.5 py-1 rounded-lg bg-teal-600/30 hover:bg-teal-600/50 text-teal-300 font-bold text-xs border border-teal-500/30 shadow transition flex items-center gap-1 disabled:opacity-50"
@@ -3083,6 +3446,13 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     </div>
                   ) : (
                     <>
+                      <button
+                        onClick={() => handleAddMultipleToQueue(filteredLibrary, false)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-300 hover:text-white font-bold text-xs border border-indigo-500/30 shadow transition flex items-center gap-1.5"
+                        title="เพิ่มเพลงทั้งหมดในหน้านี้ลงในคิวเล่นต่อ"
+                      >
+                        <span>📑 + ลงคิวทั้งหมด ({filteredLibrary.length})</span>
+                      </button>
                       <button
                         disabled={isNormalizingBatch}
                         onClick={() => handleBatchNormalize(false)}
@@ -3243,6 +3613,22 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => handleAddMultipleToQueue(filteredLibrary, true)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
+                      title="เริ่มเล่นเพลงแรกของโฟลเดอร์นี้ทันที และเพิ่มเพลงที่เหลือทั้งหมดลงคิว"
+                    >
+                      <span>▶ เล่นทั้งโฟลเดอร์</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleAddMultipleToQueue(filteredLibrary, false)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 hover:text-white border border-purple-500/40 font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
+                      title="เพิ่มเพลงทั้งหมดในโฟลเดอร์นี้ลงในคิวเล่นต่อ (Up Next Queue)"
+                    >
+                      <span>📑 + ลงคิว ({filteredLibrary.length})</span>
+                    </button>
+
+                    <button
                       onClick={() => handleOpenTrackFolder({ playlist_name: libFilterPlaylist } as Track)}
                       className="px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-200 hover:text-white border border-purple-500/30 font-bold text-xs shadow transition flex items-center gap-1.5"
                       title="เปิดโฟลเดอร์ของ Mix นี้ใน File Explorer"
@@ -3282,7 +3668,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               )}
 
               {/* Table */}
-              <div className="flex-1 overflow-y-auto px-6 py-2 pb-32">
+              <div ref={libTableScrollRef} className="flex-1 overflow-y-auto px-6 py-2 pb-32">
                 <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-white/5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider items-center">
                   <div className="col-span-1 text-center flex items-center justify-center gap-1.5">
                     <input
@@ -3304,14 +3690,36 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                 <div className="py-2 space-y-1">
                   {filteredLibrary.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-28 text-zinc-600">
-                      <p className="font-bold text-zinc-400 text-sm">No tracks found in Library</p>
-                      <p className="text-xs text-zinc-600 mt-1">Click 🔄 Sync above or convert new tracks to populate library</p>
+                    <div className="flex flex-col items-center justify-center py-20 text-zinc-500 space-y-3">
+                      <span className="text-4xl">🔍</span>
+                      <div className="text-center">
+                        <p className="font-bold text-zinc-300 text-sm">
+                          {libSearch ? `ไม่พบเพลงในเครื่องที่ตรงกับ "${libSearch}"` : 'ยังไม่มีเพลงในคลังเพลง'}
+                        </p>
+                        <p className="text-xs text-zinc-500 mt-1">
+                          {libSearch
+                            ? 'ต้องการค้นหาและดาวน์โหลดเพลงนี้จาก Apple Music / Deezer / YouTube หรือไม่?'
+                            : 'กด 🔄 Sync ด้านบน หรือดาวน์โหลดเพลงใหม่เข้ามา'}
+                        </p>
+                      </div>
+                      {libSearch && (
+                        <button
+                          onClick={() => {
+                            setSmartSearchInitialQuery(libSearch.trim());
+                            setShowSmartSearchModal(true);
+                          }}
+                          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95"
+                        >
+                          <span>🌐</span>
+                          <span>ค้นหาและดาวน์โหลดเพลง "{libSearch}" จากออนไลน์</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
                     filteredLibrary.map((t, idx) => (
                       <div
-                        key={t.filepath || idx}
+                        key={t.id ? `lib_${t.id}_${idx}` : `lib_fp_${t.filepath || idx}`}
+                        onContextMenu={(e) => handleOpenContextMenu(e, t, 'library', idx, filteredLibrary)}
                         className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
                           isSameTrack(activeTrack, t) ? 'bg-indigo-500/10 border-indigo-500/30' : ''
                         }`}
@@ -3341,14 +3749,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                             <p className="text-sm font-semibold text-white truncate leading-snug">{t.title}</p>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <p className="text-xs text-zinc-400 font-medium truncate max-w-[140px]">{t.artist || 'Unknown Artist'}</p>
-                              {t.playlist_name && (
+                              {getTrackFolderName(t) !== 'Singles' && (
                                 <span
                                   onClick={(e) => handleOpenTrackFolder(t, e)}
                                   className="text-[9px] font-medium text-indigo-300 hover:text-white bg-indigo-500/15 hover:bg-indigo-500/35 border border-indigo-500/25 hover:border-indigo-400 px-1.5 py-0.5 rounded-md truncate max-w-[140px] cursor-pointer transition flex items-center gap-1 shadow-sm active:scale-95 group"
-                                  title={`คลิกเพื่อเปิดโฟลเดอร์ "${t.playlist_name}" ในคอมพิวเตอร์ (Open in Explorer)`}
+                                  title={`คลิกเพื่อเปิดโฟลเดอร์ "${getTrackFolderName(t)}" ในคอมพิวเตอร์ (Open in Explorer)`}
                                 >
                                   <span className="group-hover:scale-110 transition-transform">📁</span>
-                                  <span className="truncate">{t.playlist_name}</span>
+                                  <span className="truncate">{getTrackFolderName(t)}</span>
                                 </span>
                               )}
                             </div>
@@ -3543,12 +3951,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     {mixtapeTracks.length > 0 && (
                       <>
                         <button
-                          onClick={handleAddAllMixtapeToQueue}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 font-bold text-xs border border-indigo-500/30 transition flex items-center gap-1.5 active:scale-95 shadow"
-                          title="Add all tracks in this Smart Mixtape sequence to Up Next Queue"
+                          onClick={() => handleAddAllMixtapeToQueue(true)}
+                          className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
+                          title="เริ่มเล่นเพลงแรกของ Mixtape Set ทันทีและเพิ่มเพลงที่เหลือลงคิว"
+                        >
+                          <span>▶ เล่นทั้ง Mixtape</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAddAllMixtapeToQueue(false)}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white font-bold text-xs border border-indigo-500/40 transition flex items-center gap-1.5 active:scale-95 shadow"
+                          title="เพิ่มเพลงทั้งหมดใน Smart Mixtape Set นี้ลงในคิวเล่นต่อ (Up Next Queue)"
                         >
                           <span>📑</span>
-                          <span>Queue All Set ({mixtapeTracks.length})</span>
+                          <span>+ ลงคิวทั้ง Set ({mixtapeTracks.length})</span>
                         </button>
 
                         <button
@@ -3691,6 +4107,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                               initial={{ opacity: 0, y: 5 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0 }}
+                              onContextMenu={(e) => handleOpenContextMenu(e, t, 'mixtape', idx, mixtapeTracks)}
                               className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
                                 isSameTrack(activeTrack, t) ? 'bg-indigo-500/10 border-indigo-500/30 shadow' : ''
                               }`}
@@ -3926,6 +4343,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                           displayTracks.map((t: Track, idx: number) => (
                             <div
                               key={t.filepath || idx}
+                              onContextMenu={(e) => handleOpenContextMenu(e, t, 'library', idx, displayTracks)}
                               className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
                                 isSameTrack(activeTrack, t) ? 'bg-emerald-500/10 border-emerald-500/30' : ''
                               }`}
@@ -4180,7 +4598,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       </div>
 
       {/* Audio Preview Dock: Authentic Beatport Pro Player */}
-      <footer className="fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0c]/98 backdrop-blur-2xl border-t border-white/10 px-5 flex items-center justify-between text-white z-50 shadow-2xl">
+      <footer
+        onContextMenu={(e) => handleOpenContextMenu(e, activeTrack, 'player')}
+        className="fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0c]/98 backdrop-blur-2xl border-t border-white/10 px-5 flex items-center justify-between text-white z-50 shadow-2xl"
+      >
         {/* 1. Left: Cover Art + Title / Artist / Label (Clickable to expand) */}
         <div
           onClick={() => setShowExpandedPlayer(true)}
@@ -4308,18 +4729,34 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             🔁{repeatMode === 'one' && <span className="text-[8px] font-mono font-bold absolute top-0.5 right-0.5 bg-sky-400 text-black rounded-full px-0.5">1</span>}
           </button>
 
-          {/* Volume Slider */}
-          <div className="flex items-center gap-1.5 px-1">
-            <span className="text-xs text-zinc-400">🔊</span>
+          {/* Volume Slider & Controls */}
+          <div
+            className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-xl border border-white/5"
+            onWheel={(e) => {
+              e.preventDefault();
+              changeVolumeStep(e.deltaY < 0 ? 0.05 : -0.05);
+            }}
+          >
+            <button
+              onClick={toggleMute}
+              className="text-xs text-zinc-400 hover:text-white transition p-0.5"
+              title={isMuted || volume === 0 ? 'Unmute (M)' : 'Mute (M)'}
+            >
+              {isMuted || volume === 0 ? '🔇' : volume < 0.35 ? '🔈' : volume < 0.7 ? '🔉' : '🔊'}
+            </button>
             <input
               type="range"
               min="0"
               max="1"
-              step="0.05"
-              value={volume}
+              step="0.01"
+              value={isMuted ? 0 : volume}
               onChange={handleVolume}
-              className="w-12 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              className="w-16 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}% (Scroll to adjust, M to mute)`}
             />
+            <span className="text-[10px] font-mono font-semibold text-emerald-400 w-7 text-right">
+              {isMuted || volume === 0 ? '0%' : `${Math.round(volume * 100)}%`}
+            </span>
           </div>
 
           {/* Up Next Queue Button with Badge */}
@@ -5121,7 +5558,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
       {/* ================= APPLE MUSIC & SPOTIFY IMMERSIVE FULLSCREEN PLAYER ================= */}
       {showExpandedPlayer && activeTrack && (
-        <div className="fixed inset-0 bg-[#0a0a0e]/95 backdrop-blur-3xl z-50 flex flex-col justify-between p-8 text-white animate-fade-in select-none">
+        <div
+          onContextMenu={(e) => handleOpenContextMenu(e, activeTrack, 'player')}
+          className="fixed inset-0 bg-[#0a0a0e]/95 backdrop-blur-3xl z-50 flex flex-col justify-between p-8 text-white animate-fade-in select-none"
+        >
           {/* Top Bar: Close / Collapse / Status */}
           <div className="flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -5248,6 +5688,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   smartRecommendations.map(({ track: rec, totalScore, matchLabel, bpmDiff }, idx) => (
                     <div
                       key={idx}
+                      onContextMenu={(e) => handleOpenContextMenu(e, rec, 'recommendation', idx)}
                       className="p-3 bg-[#18181c]/70 hover:bg-[#202026] border border-white/5 rounded-2xl flex items-center justify-between gap-3 transition group"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -5323,22 +5764,58 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
             {/* Controls Row */}
             <div className="flex items-center justify-between px-6">
-              {/* Shuffle */}
-              <button
-                onClick={() => setIsShuffle(!isShuffle)}
-                className={`p-2 rounded-xl text-sm transition ${
-                  isShuffle ? 'text-emerald-400 bg-emerald-500/15 font-bold' : 'text-zinc-500 hover:text-white'
-                }`}
-                title="Shuffle"
-              >
-                🔀
-              </button>
+              {/* Left Group: Shuffle, Repeat, Auto-DJ */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsShuffle(!isShuffle);
+                    showToast(!isShuffle ? 'Shuffle On' : 'Shuffle Off', 'info');
+                  }}
+                  className={`p-2 rounded-xl text-sm transition ${
+                    isShuffle ? 'text-emerald-400 bg-emerald-500/15 font-bold' : 'text-zinc-500 hover:text-white'
+                  }`}
+                  title={isShuffle ? 'Shuffle On' : 'Shuffle Off'}
+                >
+                  🔀
+                </button>
 
-              {/* Main Playback Buttons */}
+                <button
+                  onClick={() => {
+                    const next = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+                    setRepeatMode(next);
+                    showToast(`Repeat: ${next.toUpperCase()}`, 'info');
+                  }}
+                  className={`p-2 rounded-xl text-sm transition relative ${
+                    repeatMode !== 'off' ? 'text-sky-400 bg-sky-500/15 font-bold' : 'text-zinc-500 hover:text-white'
+                  }`}
+                  title={`Repeat: ${repeatMode}`}
+                >
+                  🔁{repeatMode === 'one' && <span className="text-[9px] font-bold absolute top-1 right-1 bg-sky-400 text-black rounded-full px-0.5">1</span>}
+                </button>
+
+                <button
+                  onClick={() => {
+                    const next = !isAutoDjEnabled;
+                    setIsAutoDjEnabled(next);
+                    showToast(next ? '🤖 Auto-DJ Mix Mode Enabled' : 'Auto-DJ Disabled', 'info');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition flex items-center gap-1.5 ${
+                    isAutoDjEnabled
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_#10b98140]'
+                      : 'bg-white/5 text-zinc-500 border-white/5 hover:text-white'
+                  }`}
+                  title="Auto-DJ Mode: Continuous harmonic mixing"
+                >
+                  <span>🤖 Auto-DJ</span>
+                </button>
+              </div>
+
+              {/* Center Group: Prev, Play/Pause, Next */}
               <div className="flex items-center gap-6">
                 <button
                   onClick={handlePlayPrev}
-                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95"
+                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95 border border-white/5"
+                  title="Previous Track"
                 >
                   ⏮
                 </button>
@@ -5346,31 +5823,89 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 <button
                   onClick={togglePlay}
                   className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-500 hover:scale-105 active:scale-95 text-white font-bold text-2xl flex items-center justify-center shadow-[0_0_30px_#10b98160] transition"
+                  title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
                 >
                   {isPlaying ? '⏸' : '▶'}
                 </button>
 
                 <button
                   onClick={handlePlayNext}
-                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95"
+                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95 border border-white/5"
+                  title="Next Track / Mix Next"
                 >
                   ⏭
                 </button>
               </div>
 
-              {/* Repeat */}
-              <button
-                onClick={() => {
-                  const next = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
-                  setRepeatMode(next);
-                }}
-                className={`p-2 rounded-xl text-sm transition relative ${
-                  repeatMode !== 'off' ? 'text-sky-400 bg-sky-500/15 font-bold' : 'text-zinc-500 hover:text-white'
-                }`}
-                title={`Repeat: ${repeatMode}`}
-              >
-                🔁{repeatMode === 'one' && <span className="text-[9px] font-bold absolute top-1 right-1 bg-sky-400 text-black rounded-full px-0.5">1</span>}
-              </button>
+              {/* Right Group: Pro Volume Controls & Up Next Queue */}
+              <div className="flex items-center gap-3">
+                {/* Volume Section */}
+                <div
+                  className="flex items-center gap-2 bg-[#18181c]/90 border border-white/10 px-3.5 py-2 rounded-2xl backdrop-blur-md shadow-lg"
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    changeVolumeStep(e.deltaY < 0 ? 0.05 : -0.05);
+                  }}
+                >
+                  {/* Volume Down Button */}
+                  <button
+                    onClick={() => changeVolumeStep(-0.05)}
+                    className="text-zinc-400 hover:text-white text-xs w-6 h-6 rounded-lg hover:bg-white/5 flex items-center justify-center transition font-bold"
+                    title="ลดเสียง (-5%)"
+                  >
+                    -
+                  </button>
+
+                  {/* Dynamic Speaker / Mute Toggle Button */}
+                  <button
+                    onClick={toggleMute}
+                    className="text-base text-zinc-300 hover:text-white transition p-0.5 hover:scale-110"
+                    title={isMuted || volume === 0 ? 'เปิดเสียง (Unmute - M)' : 'ปิดเสียง (Mute - M)'}
+                  >
+                    {isMuted || volume === 0 ? '🔇' : volume < 0.35 ? '🔈' : volume < 0.7 ? '🔉' : '🔊'}
+                  </button>
+
+                  {/* Volume Slider */}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolume}
+                    className="w-24 md:w-32 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                    title={`ระดับเสียง: ${Math.round((isMuted ? 0 : volume) * 100)}% (เลื่อนเมาส์หรือกด ↑ / ↓)`}
+                  />
+
+                  {/* Volume Up Button */}
+                  <button
+                    onClick={() => changeVolumeStep(0.05)}
+                    className="text-zinc-400 hover:text-white text-xs w-6 h-6 rounded-lg hover:bg-white/5 flex items-center justify-center transition font-bold"
+                    title="เร่งเสียง (+5%)"
+                  >
+                    +
+                  </button>
+
+                  {/* Percentage Badge */}
+                  <span className="text-xs font-mono font-bold text-emerald-400 w-10 text-right">
+                    {isMuted || volume === 0 ? 'MUTE' : `${Math.round(volume * 100)}%`}
+                  </span>
+                </div>
+
+                {/* Queue Drawer Button */}
+                <button
+                  onClick={() => setShowQueueDrawer(true)}
+                  className="relative px-3.5 py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white font-semibold text-xs border border-white/10 transition flex items-center gap-1.5 shadow"
+                  title="Open Up Next Queue"
+                >
+                  <span>📑 Queue</span>
+                  {playQueue.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-black font-mono text-[10px] font-bold shadow">
+                      {playQueue.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -5441,6 +5976,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     {playQueue.map((t, idx) => (
                       <div
                         key={idx}
+                        onContextMenu={(e) => handleOpenContextMenu(e, t, 'drawer', idx, playQueue)}
                         className="p-2.5 bg-[#101013] hover:bg-[#18181c] border border-white/5 rounded-xl flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -5478,6 +6014,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   {smartRecommendations.slice(0, 4).map(({ track: rec, totalScore, matchLabel }, rIdx) => (
                     <div
                       key={rIdx}
+                      onContextMenu={(e) => handleOpenContextMenu(e, rec, 'recommendation', rIdx)}
                       className="p-2.5 bg-[#101013] hover:bg-[#18181c] border border-white/5 rounded-xl flex items-center justify-between gap-2 text-xs"
                     >
                       <div className="min-w-0 flex-1">
@@ -6520,6 +7057,416 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           </div>
         </div>
       )}
+
+      {/* ================= RIGHT CLICK CONTEXT MENU (ระบบคลิกขวา) ================= */}
+      {contextMenu.isOpen && (
+        <div
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          className="fixed z-[99999] w-64 bg-[#141418]/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2 text-white animate-fade-in select-none text-xs"
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {contextMenu.track ? (
+            <>
+              {/* Track Mini Card Header */}
+              <div className="flex items-center gap-2.5 p-2 bg-white/5 rounded-xl border border-white/5 mb-1.5">
+                <div className="w-9 h-9 rounded-lg bg-[#202026] overflow-hidden flex-shrink-0 relative">
+                  {contextMenu.track.cover_url ? (
+                    <img src={contextMenu.track.cover_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-white truncate leading-tight">{contextMenu.track.title}</p>
+                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">{contextMenu.track.artist || 'Unknown Artist'}</p>
+                  <div className="flex items-center gap-1.5 mt-1 font-mono text-[9px]">
+                    <span className="text-emerald-400 font-bold">{contextMenu.track.camelot || '8A'}</span>
+                    <span className="text-zinc-500">•</span>
+                    <span className="text-zinc-300">{Math.round(contextMenu.track.bpm || 128)} BPM</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Rate 1-5 Stars */}
+              <div className="px-2 py-1 flex items-center justify-between border-b border-white/5 pb-1.5 mb-1">
+                <span className="text-[10px] text-zinc-400 font-semibold">ให้คะแนน:</span>
+                <div className="flex items-center gap-1 text-amber-400">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => handleRateFromContextMenu(star)}
+                      className={`hover:scale-125 transition text-xs ${
+                        (contextMenu.track?.stars || 0) >= star ? 'text-amber-400' : 'text-zinc-600 hover:text-amber-300'
+                      }`}
+                      title={`ให้ ${star} ดาว`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Playback Actions */}
+              <div className="space-y-0.5">
+                {/* Batch Selection Play & Queue (if multiple tracks selected in library) */}
+                {selectedLibIndices.length > 1 && contextMenu.source === 'library' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selected = selectedLibIndices.map(i => filteredLibrary[i]).filter(Boolean);
+                        handleAddMultipleToQueue(selected, true);
+                        closeContextMenu();
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 flex items-center gap-2.5 transition text-left font-bold"
+                    >
+                      <span>▶</span>
+                      <span>เล่นเพลงที่เลือกทั้งหมด ({selectedLibIndices.length} เพลง)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selected = selectedLibIndices.map(i => filteredLibrary[i]).filter(Boolean);
+                        handleAddMultipleToQueue(selected, false);
+                        closeContextMenu();
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 flex items-center gap-2.5 transition text-left font-bold"
+                    >
+                      <span>📑</span>
+                      <span>เพิ่มเพลงที่เลือกทั้งหมดลงคิว ({selectedLibIndices.length} เพลง)</span>
+                    </button>
+                    <div className="h-px bg-white/5 my-0.5" />
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) {
+                      playTrack(contextMenu.track, contextMenu.playlistContext || [contextMenu.track], false);
+                    }
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/20 text-zinc-200 hover:text-emerald-300 flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span className="text-emerald-400">▶</span>
+                  <span>เล่นเพลงนี้ทันที (Play Now)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) handleAddToQueue(contextMenu.track, true);
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span className="text-sky-400">＋</span>
+                  <span>เล่นเป็นเพลงถัดไป (Play Next)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) handleAddToQueue(contextMenu.track, false);
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span className="text-amber-400">📑</span>
+                  <span>เพิ่มเข้าคิวเล่นต่อ (Add to Queue)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) {
+                      setMixtapeTracks((prev) => [...prev, contextMenu.track!]);
+                      showToast(`Added "${contextMenu.track.title}" to Smart Mixtape Studio`, 'success');
+                    }
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-indigo-500/20 text-zinc-200 hover:text-indigo-300 flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span className="text-indigo-400">🎧</span>
+                  <span>ส่งไปยัง Smart Mixtape Studio</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-white/5 my-1" />
+
+              {/* Tag & File Actions */}
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) {
+                      setEditingTrack({
+                        ...contextMenu.track,
+                        index: contextMenu.index ?? 0,
+                        source: (contextMenu.source === 'queue' ? 'queue' : contextMenu.source === 'mixtape' ? 'mixtape' : 'library'),
+                      });
+                    }
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span>✏️</span>
+                  <span>แก้ไขข้อมูล / Tags & DJ Cues</span>
+                </button>
+
+                {contextMenu.track.camelot && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (contextMenu.track?.camelot) {
+                        setLibFilterKey(contextMenu.track.camelot);
+                        setActiveTab('library');
+                        showToast(`🔍 Filtering library by Key ${contextMenu.track.camelot}`, 'info');
+                      }
+                      closeContextMenu();
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                  >
+                    <span>🔍</span>
+                    <span>ค้นหาเพลงคีย์เดียวกัน ({contextMenu.track.camelot})</span>
+                  </button>
+                )}
+
+                {contextMenu.track.filepath && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (contextMenu.track) handleOpenTrackFolder(contextMenu.track, e);
+                      closeContextMenu();
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                  >
+                    <span>📁</span>
+                    <span>เปิดโฟลเดอร์ไฟล์เพลง (Show in Folder)</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (contextMenu.track) {
+                      const text = `${contextMenu.track.artist ? `${contextMenu.track.artist} - ` : ''}${contextMenu.track.title}`;
+                      navigator.clipboard.writeText(text);
+                      showToast(`Copied: "${text}"`, 'info');
+                    }
+                    closeContextMenu();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center gap-2.5 transition text-left font-medium"
+                >
+                  <span>📋</span>
+                  <span>คัดลอกชื่อเพลง (Copy Info)</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-white/5 my-1" />
+
+              {/* Remove / Delete Action */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (contextMenu.source === 'queue' && contextMenu.index !== undefined) {
+                    setTracks((prev) => prev.filter((_, i) => i !== contextMenu.index));
+                    showToast('Removed track from queue', 'info');
+                  } else if (contextMenu.source === 'mixtape' && contextMenu.index !== undefined) {
+                    setMixtapeTracks((prev) => prev.filter((_, i) => i !== contextMenu.index));
+                    showToast('Removed track from mixtape', 'info');
+                  } else if (contextMenu.source === 'drawer' && contextMenu.index !== undefined) {
+                    handleRemoveFromQueue(contextMenu.index);
+                  } else if (contextMenu.track?.filepath) {
+                    if (confirm(`ลบเพลง "${contextMenu.track.title}" ออกจาก Library หรือไม่?`)) {
+                      invokeBackend('batch_delete_tracks', {
+                        filepaths: [contextMenu.track.filepath],
+                        delete_files: false,
+                      }).then(() => {
+                        refreshLibrary();
+                        showToast('Deleted track from library', 'info');
+                      });
+                    }
+                  }
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 flex items-center gap-2.5 transition text-left font-medium"
+              >
+                <span>🗑️</span>
+                <span>ลบออกจากรายการ (Remove / Delete)</span>
+              </button>
+            </>
+          ) : (
+            /* General Global Context Menu (when clicking background or player) */
+            <>
+              <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-zinc-500 tracking-wider font-mono border-b border-white/5 mb-1">
+                DJ Master Controls
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  togglePlay();
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>{isPlaying ? '⏸' : '▶'}</span>
+                  <span>{isPlaying ? 'หยุดชั่วคราว (Pause)' : 'เล่นต่อ (Resume Play)'}</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 font-mono">Space</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handlePlayNext();
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>⏭</span>
+                  <span>เพลงถัดไป (Next Track)</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handlePlayPrev();
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>⏮</span>
+                  <span>เพลงก่อนหน้า (Previous)</span>
+                </div>
+              </button>
+
+              <div className="h-px bg-white/5 my-1" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isAutoDjEnabled;
+                  setIsAutoDjEnabled(next);
+                  showToast(next ? '🤖 Auto-DJ Mix Enabled' : 'Auto-DJ Disabled', 'info');
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>🤖</span>
+                  <span>Auto-DJ Continuous Mix</span>
+                </div>
+                <span className={`text-[10px] font-bold ${isAutoDjEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  {isAutoDjEnabled ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsShuffle(!isShuffle);
+                  showToast(!isShuffle ? 'Shuffle On' : 'Shuffle Off', 'info');
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>🔀</span>
+                  <span>สุ่มเพลง (Shuffle)</span>
+                </div>
+                <span className={`text-[10px] font-bold ${isShuffle ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  {isShuffle ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              <div className="h-px bg-white/5 my-1" />
+
+              {/* Volume Quick Presets */}
+              <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-zinc-500 tracking-wider font-mono">
+                ระดับเสียง (Volume: {Math.round(volume * 100)}%)
+              </div>
+
+              <div className="grid grid-cols-3 gap-1 px-1 my-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleMute();
+                    closeContextMenu();
+                  }}
+                  className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 text-[11px] font-semibold text-center transition"
+                >
+                  🔇 Mute
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyVolume(0.5);
+                    closeContextMenu();
+                  }}
+                  className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 text-[11px] font-semibold text-center transition"
+                >
+                  🔉 50%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyVolume(1.0);
+                    closeContextMenu();
+                  }}
+                  className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 text-[11px] font-semibold text-center transition"
+                >
+                  🔊 100%
+                </button>
+              </div>
+
+              <div className="h-px bg-white/5 my-1" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExpandedPlayer(!showExpandedPlayer);
+                  closeContextMenu();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-indigo-500/20 text-zinc-200 hover:text-indigo-300 flex items-center justify-between transition text-left font-medium"
+              >
+                <div className="flex items-center gap-2">
+                  <span>⛶</span>
+                  <span>{showExpandedPlayer ? 'ย่อหน้าจอเล่นเพลง' : 'ขยายหน้าจอเล่นเพลงเต็มจอ'}</span>
+                </div>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Smart Music Search Modal (Local Folder + Online Multi-Source with Deduplication) */}
+      <SmartSearchModal
+        isOpen={showSmartSearchModal}
+        onClose={() => setShowSmartSearchModal(false)}
+        initialQuery={smartSearchInitialQuery}
+        invokeBackend={invokeBackend}
+        onAddTracksToQueue={(newTracks) => {
+          setTracks((prev) => [...prev, ...newTracks]);
+          setActiveTab('queue');
+        }}
+        onPlayTrack={(track) => {
+          playTrack(track, [track]);
+        }}
+        onOpenFolder={(path) => {
+          invokeBackend('open_folder', { path });
+        }}
+        showToast={showToast}
+      />
 
     </div>
   );
