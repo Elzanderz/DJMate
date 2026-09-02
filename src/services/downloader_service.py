@@ -394,7 +394,6 @@ class DownloaderService:
                 'extractor_args': {
                     'youtube': {
                         'player_client': ['android', 'web', 'tv'],
-                        'player_skip': ['js', 'configs'],
                     }
                 },
                 'http_headers': {

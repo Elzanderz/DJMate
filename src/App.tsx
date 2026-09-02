@@ -1932,11 +1932,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         });
       } else {
         updateTrackStatus(index, 0, 'Failed');
-        showToast(`Failed downloading: ${target.title}`, 'error');
+        const errDetail = res?.error ? `: ${res.error}` : '';
+        showToast(`ดาวน์โหลดไม่สำเร็จ (${target.title})${errDetail}`, 'error');
       }
-    } catch (e) {
+    } catch (e: any) {
       updateTrackStatus(index, 0, 'Failed');
-      showToast(`Error: ${e}`, 'error');
+      showToast(`เกิดข้อผิดพลาด: ${e?.message || e}`, 'error');
     }
   };
 
