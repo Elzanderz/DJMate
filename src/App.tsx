@@ -160,14 +160,11 @@ export const CamelotBadge: React.FC<{
       <span
         onClick={onClick}
         style={{
-          backgroundColor: colorInfo.bg,
-          borderColor: isExactCurrent ? '#10b981' : colorInfo.border,
+          backgroundColor: isExactCurrent ? '#1DB95415' : '#1e1e24',
+          borderColor: isExactCurrent ? '#1DB954' : '#333338',
           color: colorInfo.text,
-          boxShadow: isExactCurrent ? `0 0 10px ${colorInfo.hex}60` : undefined,
         }}
-        className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 ${
-          onClick ? 'hover:shadow-md' : ''
-        }`}
+        className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border transition cursor-pointer hover:border-white/30 active:scale-95 flex items-center gap-1.5"
         title={`Camelot Key: ${k}${keyName ? ` (${keyName})` : ` (${colorInfo.name})`} • คลิกเพื่อเปิด Camelot Wheel`}
       >
         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorInfo.hex }} />
@@ -177,11 +174,11 @@ export const CamelotBadge: React.FC<{
       {showHarmonicTag && matchInfo && (
         <span
           style={{
-            backgroundColor: matchInfo.bg,
-            borderColor: matchInfo.border,
+            backgroundColor: '#1e1e24',
+            borderColor: '#333338',
             color: matchInfo.color,
           }}
-          className="text-[9px] font-bold font-mono px-1 py-0.5 rounded border flex items-center gap-0.5 shadow-sm animate-pulse whitespace-nowrap"
+          className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded-full border flex items-center gap-0.5 whitespace-nowrap"
           title={matchInfo.label}
         >
           {matchInfo.badge}
@@ -943,31 +940,31 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       <div className="absolute inset-0 pointer-events-none">
         {/* Intro Mix-In Marker (🟢 In) */}
         <div className="absolute left-[1%] top-0 flex items-center gap-0.5" title="Mix-In (Intro 32-Beat)">
-          <span className="w-2 h-2 bg-emerald-400 rounded-b-sm shadow-[0_0_6px_#34d399]" />
+          <span className="w-2 h-2 bg-emerald-400 rounded-b-sm" />
         </div>
 
         {/* Vocals Marker (🎤 Vocals) */}
         <div className="absolute left-[18%] top-0" title="Vocals (เนื้อร้อง)">
-          <span className="w-1.5 h-1.5 bg-amber-400 rounded-b-sm shadow-[0_0_4px_#fbbf24]" />
+          <span className="w-1.5 h-1.5 bg-amber-400 rounded-b-sm" />
         </div>
 
         {/* Drop Marker (⚡ Drop) */}
         <div style={{ left: `${dropPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Main Drop / Bass (${Math.floor(dropSec/60)}:${Math.floor(dropSec%60)<10?'0':''}${Math.floor(dropSec%60)})`}>
-          <span className="w-2 h-2 bg-sky-400 rounded-b-sm shadow-[0_0_6px_#38bdf8]" />
+          <span className="w-2 h-2 bg-sky-400 rounded-b-sm" />
         </div>
 
         {/* Outro Mix-Out Marker (🔴 Out) */}
         <div style={{ left: `${mixOutPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Mix-Out (Outro ${Math.floor(outroSec/60)}:${Math.floor(outroSec%60)<10?'0':''}${Math.floor(outroSec%60)})`}>
-          <span className="w-2 h-2 bg-rose-500 rounded-b-sm shadow-[0_0_6px_#f43f5e]" />
+          <span className="w-2 h-2 bg-rose-500 rounded-b-sm" />
         </div>
       </div>
 
-      {/* Beatport White Playhead Needle */}
+      {/* Clean White Playhead Needle */}
       <div
         style={{ left: `${progressPct}%`, transform: 'translateX(-50%)' }}
-        className="absolute top-0 bottom-0 w-[2px] bg-white shadow-[0_0_8px_#ffffff,0_0_15px_#38bdf8] pointer-events-none z-10 will-change-transform"
+        className="absolute top-0 bottom-0 w-[2px] bg-white pointer-events-none z-10 will-change-transform"
       >
-        <div className="w-3 h-3 bg-white rounded-full -ml-[5px] -top-1 absolute shadow-[0_0_8px_#ffffff] border border-sky-400" />
+        <div className="w-2.5 h-2.5 bg-white rounded-full -ml-[4px] -top-1 absolute shadow-sm" />
       </div>
 
       {/* Hover Time, Bar & Section Tooltip */}
@@ -2674,52 +2671,46 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   return (
     <div
       onContextMenu={(e) => handleOpenContextMenu(e, null, 'general')}
-      className="flex h-screen w-screen bg-[#0e0e11] text-zinc-200 select-none overflow-hidden font-sans"
+      className="flex h-screen w-screen bg-[#121212] text-zinc-200 select-none overflow-hidden font-sans"
     >
       
-      {/* ================= LEFT SIDEBAR (Workly / macOS Style) ================= */}
-      <aside className="w-64 bg-[#141417] border-r border-white/5 flex flex-col p-4 flex-shrink-0 z-20">
+      {/* ================= LEFT SIDEBAR (Spotify / Rekordbox Clean Style) ================= */}
+      <aside className="w-64 bg-[#000000] border-r border-[#242424] flex flex-col p-3.5 flex-shrink-0 z-20">
         
-        {/* macOS Traffic Lights + DJmate Brand Header */}
-        <div className="flex items-center justify-between pb-3.5 pt-1 px-1 border-b border-white/5 mb-3">
+        {/* Brand Header */}
+        <div className="flex items-center justify-between pb-3 pt-1 px-1 border-b border-[#242424] mb-3">
           <div className="flex items-center gap-2.5">
-            {/* Cool Neon DJmate Platter Logo */}
-            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-[1.5px] shadow-[0_0_15px_#8b5cf660] group cursor-pointer transition hover:scale-105 active:scale-95">
-              <div className="w-full h-full bg-[#121216] rounded-[10px] flex items-center justify-center relative overflow-hidden">
-                {/* Vinyl Grooves */}
-                <div className="absolute inset-1 rounded-full border border-white/10" />
-                <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#121216]" />
-                </div>
-                {/* Neon Live Pulse Dot */}
-                <span className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_#34d399] animate-pulse" />
-              </div>
+            {/* Minimalist Spotify Green Disc Logo */}
+            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black font-black text-sm shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer">
+              <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
+              </svg>
             </div>
 
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-base tracking-tight text-white flex items-center">
+                <span className="font-bold text-base tracking-tight text-white flex items-center">
                   <span>DJ</span>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 font-extrabold">mate</span>
+                  <span className="text-[#1DB954] font-extrabold">mate</span>
                 </span>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 border border-indigo-500/30 shadow-sm">
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#242424] text-[#1DB954] border border-[#1DB954]/30">
                   PRO
                 </span>
               </div>
-              <span className="text-[9px] text-zinc-500 font-medium tracking-wide">
+              <span className="text-[10px] text-[#727272] font-medium tracking-wide">
                 Harmonic DJ Suite
               </span>
             </div>
           </div>
 
-          <button onClick={handleOpenFolder} title="Open Output Folder" className="text-zinc-500 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition text-xs">
+          <button onClick={handleOpenFolder} title="Open Output Folder" className="text-[#727272] hover:text-white p-1.5 rounded-lg hover:bg-[#242424] transition text-xs">
             ↗
           </button>
         </div>
 
         {/* Global Search Bar */}
-        <div className="relative mb-3">
-          <div className="absolute left-3 top-2.5 text-zinc-500">
+        <div className="relative mb-2.5">
+          <div className="absolute left-3 top-2.5 text-[#727272]">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
@@ -2740,8 +2731,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 }
               }
             }}
-            placeholder="ค้นหาเพลง / URL..."
-            className="w-full bg-[#1b1b1f] hover:bg-[#202024] focus:bg-[#1b1b1f] text-xs text-white pl-8 pr-12 py-2 rounded-xl border border-white/5 focus:border-indigo-500/50 focus:outline-none transition shadow-inner font-medium placeholder:text-zinc-500"
+            placeholder="ค้นหาเพลง / วางลิงก์..."
+            className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#282828] text-xs text-white pl-8 pr-12 py-2 rounded-full border border-transparent focus:border-white/20 focus:outline-none transition font-medium placeholder:text-[#727272]"
           />
           <button
             onClick={() => {
@@ -2751,7 +2742,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             className="absolute right-2 top-2 flex items-center gap-1 cursor-pointer hover:opacity-80 transition"
             title="กดเพื่อเปิดค้นหาเพลงอัจฉริยะ (Ctrl+F)"
           >
-            <span className="text-[10px] font-mono bg-[#28282d] hover:bg-indigo-600/40 hover:text-indigo-200 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5 transition">
+            <span className="text-[10px] font-mono bg-[#181818] hover:text-white text-[#b3b3b3] px-1.5 py-0.5 rounded border border-[#333333] transition">
               ⌘ F
             </span>
           </button>
@@ -2763,14 +2754,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             setSmartSearchInitialQuery(url.trim());
             setShowSmartSearchModal(true);
           }}
-          className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent hover:from-indigo-500/25 hover:via-purple-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 transition shadow-sm mb-4"
+          className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer bg-[#181818] hover:bg-[#242424] text-[#b3b3b3] hover:text-white border border-[#282828] transition mb-3"
         >
-          <div className="flex items-center gap-2.5 text-xs font-bold">
-            <span className="text-sm">🔍</span>
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <span>🔍</span>
             <span>Smart Search (ค้นหาเพลง)</span>
           </div>
-          <span className="text-[9px] font-mono font-bold bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded">
-            เพลงในเครื่อง / โหลดเพิ่ม
+          <span className="text-[9px] font-mono bg-[#282828] text-white px-1.5 py-0.5 rounded">
+            ในเครื่อง / โหลดเพิ่ม
           </span>
         </div>
 
@@ -2779,10 +2770,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           {/* Tab 1: Studio & Queue */}
           <div
             onClick={() => setActiveTab('queue')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'queue'
-                ? 'bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent text-white font-bold border border-indigo-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -2791,32 +2782,26 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               </svg>
               <span>Spotify / Beatport Queue</span>
             </div>
-            {activeTab === 'queue' && (
-              <span className="w-1.5 h-4 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></span>
-            )}
-            {tracks.length > 0 && activeTab !== 'queue' && (
-              <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-zinc-300">
+            {tracks.length > 0 && (
+              <span className="text-[10px] font-mono bg-[#242424] px-2 py-0.5 rounded-full text-white">
                 {tracks.length}
               </span>
             )}
           </div>
 
-          {/* Tab 2: YouTube DJ Mixtape Extractor (DEDICATED SEPARATE TAB) */}
+          {/* Tab 2: YouTube DJ Mixtape Extractor */}
           <div
             onClick={() => setActiveTab('yt_extractor')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'yt_extractor'
-                ? 'bg-gradient-to-r from-red-500/15 via-rose-500/10 to-transparent text-white font-bold border border-red-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#ef4444]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
               <span className="text-red-500 text-sm">▶</span>
               <span>YouTube DJ Extractor</span>
             </div>
-            {activeTab === 'yt_extractor' && (
-              <span className="w-1.5 h-4 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444]"></span>
-            )}
           </div>
 
           {/* Tab 3: Track Library */}
@@ -2825,10 +2810,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               setActiveTab('library');
               refreshLibrary();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'library'
-                ? 'bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent text-white font-bold border border-indigo-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -2837,11 +2822,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               </svg>
               <span>Track Library</span>
             </div>
-            {activeTab === 'library' && (
-              <span className="w-1.5 h-4 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></span>
-            )}
-            {libraryTracks.length > 0 && activeTab !== 'library' && (
-              <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-zinc-300">
+            {libraryTracks.length > 0 && (
+              <span className="text-[10px] font-mono bg-[#242424] px-2 py-0.5 rounded-full text-white">
                 {libraryTracks.length}
               </span>
             )}
@@ -2853,28 +2835,25 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               setActiveTab('crates');
               handleFetchGigCrates();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'crates'
-                ? 'bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-transparent text-white font-bold border border-emerald-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#10b981]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-emerald-400 text-sm">🤖</span>
+              <span>🤖</span>
               <span>AI Gig Crates & Storage</span>
             </div>
-            {activeTab === 'crates' && (
-              <span className="w-1.5 h-4 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
-            )}
           </div>
 
-          {/* Tab 4: Smart Mixtape */}
+          {/* Tab 5: Smart Mixtape */}
           <div
             onClick={() => setActiveTab('mixtape')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'mixtape'
-                ? 'bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-transparent text-white font-bold border border-indigo-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -2883,57 +2862,48 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               </svg>
               <span>Smart Mixtape</span>
             </div>
-            {activeTab === 'mixtape' && (
-              <span className="w-1.5 h-4 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></span>
-            )}
           </div>
 
-          {/* Tab 5: AI Mashup Matcher */}
+          {/* Tab 6: AI Mashup Matcher */}
           <div
             onClick={() => {
               setActiveTab('mashups');
               handleFetchMashups();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'mashups'
-                ? 'bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-transparent text-white font-bold border border-amber-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#f59e0b]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-amber-400 text-sm">🔥</span>
+              <span>🔥</span>
               <span>AI Mashup Matcher</span>
             </div>
-            {activeTab === 'mashups' && (
-              <span className="w-1.5 h-4 rounded-full bg-amber-500 shadow-[0_0_10px_#f59e0b]"></span>
-            )}
           </div>
 
-          {/* Tab 6: Activity & History Logs */}
+          {/* Tab 7: Activity & History Logs */}
           <div
             onClick={() => {
               setActiveTab('activity');
               fetchActivities();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
               activeTab === 'activity'
-                ? 'bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-transparent text-white font-bold border border-teal-500/30'
-                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
+                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-teal-400 text-sm">⏱️</span>
+              <span>⏱️</span>
               <span>Activity History</span>
             </div>
-            {activeTab === 'activity' && (
-              <span className="w-1.5 h-4 rounded-full bg-teal-500 shadow-[0_0_10px_#14b8a6]"></span>
-            )}
           </div>
 
           {/* Camelot Wheel */}
           <div
             onClick={() => setShowCamelotModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#b3b3b3] hover:text-white hover:bg-[#181818] cursor-pointer transition"
           >
             <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" strokeWidth="2"/>
@@ -2945,29 +2915,29 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           {/* AI DJ Vibe Curator */}
           <div
             onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-purple-300 hover:text-white hover:bg-purple-500/10 cursor-pointer transition border border-purple-500/20 shadow-sm"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#b3b3b3] hover:text-white hover:bg-[#181818] cursor-pointer transition"
           >
-            <span className="text-sm">🤖</span>
-            <span className="font-bold">AI DJ Vibe Curator</span>
+            <span>🤖</span>
+            <span>AI DJ Vibe Curator</span>
           </div>
         </div>
 
         {/* Categories / DJ Crates */}
-        <div className="mt-6 pt-4 border-t border-white/5">
-          <div className="flex items-center justify-between px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+        <div className="mt-6 pt-4 border-t border-[#242424]">
+          <div className="flex items-center justify-between px-3 mb-2 text-[10px] font-bold text-[#727272] uppercase tracking-wider">
             <span>DJ CRATES & EXPORT</span>
           </div>
-          <div className="space-y-0.5 text-xs text-zinc-400 font-medium">
-            <div onClick={() => handleExportRekordbox()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-white/5 hover:text-white cursor-pointer transition">
-              <span className="text-purple-400">📦</span>
+          <div className="space-y-0.5 text-xs text-[#b3b3b3] font-medium">
+            <div onClick={() => handleExportRekordbox()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
+              <span>📦</span>
               <span>rekordbox XML (1-5★)</span>
             </div>
-            <div onClick={() => handleExportM3U8()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-white/5 hover:text-white cursor-pointer transition">
-              <span className="text-emerald-400">🎵</span>
+            <div onClick={() => handleExportM3U8()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
+              <span>🎵</span>
               <span>M3U8 Playlist</span>
             </div>
-            <div onClick={handleBrowseDir} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-white/5 hover:text-white cursor-pointer transition">
-              <span className="text-amber-400">📁</span>
+            <div onClick={handleBrowseDir} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
+              <span>📁</span>
               <span>Set Save Folder</span>
             </div>
           </div>
@@ -3148,7 +3118,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       setSmartSearchInitialQuery(url.trim());
                       setShowSmartSearchModal(true);
                     }}
-                    className="px-3.5 py-2.5 bg-gradient-to-r from-indigo-600/30 to-purple-600/30 hover:from-indigo-600/50 hover:to-purple-600/50 text-indigo-200 hover:text-white border border-indigo-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg active:scale-95 whitespace-nowrap"
+                    className="px-3.5 py-2 bg-[#242424] hover:bg-[#2a2a2a] text-white border border-[#333333] rounded-full text-xs font-semibold transition flex items-center gap-1.5 active:scale-95 whitespace-nowrap"
                     title="ค้นหาเพลงในเครื่องและออนไลน์ (Ctrl+F)"
                   >
                     <span>🔍</span>
@@ -3157,7 +3127,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   <button
                     disabled={isAnalyzing}
                     onClick={handleAnalyze}
-                    className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow transition disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold text-xs rounded-full transition disabled:opacity-50 flex items-center gap-2 active:scale-95"
                   >
                     {isAnalyzing && <span className="animate-spin text-xs">↻</span>}
                     <span>{isAnalyzing ? 'Analyzing...' : 'Add'}</span>
@@ -3165,7 +3135,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                   <button
                     onClick={() => setShowAiModal(true)}
-                    className="px-3.5 py-2.5 bg-gradient-to-r from-purple-600/30 to-pink-600/30 hover:from-purple-600/50 hover:to-pink-600/50 text-purple-200 hover:text-white border border-purple-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg active:scale-95 whitespace-nowrap"
+                    className="px-3.5 py-2 bg-[#242424] hover:bg-[#2a2a2a] text-[#e0e0e0] hover:text-white border border-[#333333] rounded-full text-xs font-semibold transition flex items-center gap-1.5 active:scale-95 whitespace-nowrap"
                     title="ให้ AI ช่วยเลือกเพลงตามบรรยากาศร้านและลูกค้า"
                   >
                     <span>🤖</span>
@@ -3178,7 +3148,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     <>
                       <button
                         onClick={() => handleAddMultipleToQueue(selectedIndices.map(i => tracks[i]).filter(Boolean), false)}
-                        className="px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
+                        className="px-3.5 py-2 rounded-full bg-[#242424] hover:bg-[#2a2a2a] text-white border border-[#333333] font-semibold text-xs transition flex items-center gap-1.5 active:scale-95"
                         title="เพิ่มเพลงที่เลือกลงในเครื่องเล่น (Up Next Queue)"
                       >
                         <span>📑 + ลงคิว ({selectedIndices.length})</span>
@@ -3187,14 +3157,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       <button
                         disabled={isConvertingAll}
                         onClick={handleConvertSelected}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-white font-bold text-xs shadow-lg transition flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] active:scale-95 text-black font-bold text-xs transition flex items-center gap-1.5"
                       >
                         {isConvertingAll ? <span className="animate-spin text-xs">↻</span> : <span>↓</span>}
                         <span>Download Selected ({selectedIndices.length})</span>
                       </button>
                       <button
                         onClick={handleRemoveSelected}
-                        className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/20 transition"
+                        className="px-3 py-2 rounded-full bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 font-semibold text-xs border border-rose-500/30 transition"
                         title="Remove Selected"
                       >
                         ✕ Remove
@@ -3205,7 +3175,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   <button
                     disabled={tracks.length === 0 || isConvertingAll}
                     onClick={handleConvertAll}
-                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs shadow-lg transition disabled:opacity-40 flex items-center gap-2"
+                    className="px-5 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] active:scale-95 text-black font-bold text-xs transition disabled:opacity-40 flex items-center gap-2"
                   >
                     {isConvertingAll ? <span className="animate-spin text-xs">↻</span> : <span>↓</span>}
                     <span>Convert All Queue</span>
@@ -3213,7 +3183,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                   <button
                     onClick={() => handleExportRekordbox(tracks)}
-                    className="px-4 py-2 rounded-xl bg-[#202026] hover:bg-[#282830] text-zinc-200 text-xs font-semibold border border-white/5 transition"
+                    className="px-4 py-2 rounded-full bg-[#242424] hover:bg-[#2a2a2a] text-white text-xs font-semibold border border-[#333333] transition"
                   >
                     rekordbox XML
                   </button>
@@ -3222,19 +3192,19 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
               {/* Overall Queue Progress Bar */}
               {tracks.length > 0 && (
-                <div className="px-6 py-2.5 bg-[#121215] border-b border-white/5 flex items-center justify-between gap-4 flex-shrink-0">
+                <div className="px-6 py-2.5 bg-[#181818] border-b border-[#242424] flex items-center justify-between gap-4 flex-shrink-0">
                   <div className="flex items-center gap-3 text-xs">
                     <span className="font-bold text-white flex items-center gap-1.5">
-                      {isConvertingAll && <span className="animate-spin text-indigo-400">↻</span>}
+                      {isConvertingAll && <span className="animate-spin text-[#1DB954]">↻</span>}
                       <span>{isConvertingAll ? 'Converting Queue in progress...' : 'Queue Progress:'}</span>
                     </span>
-                    <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-lg border border-indigo-500/20">
+                    <span className="font-mono font-bold text-[#1DB954] bg-[#1DB954]/15 px-2.5 py-0.5 rounded-full border border-[#1DB954]/30">
                       {tracks.filter(t => t.done).length} / {tracks.length} Completed ({tracks.length > 0 ? Math.round((tracks.filter(t => t.done).length / tracks.length) * 100) : 0}%)
                     </span>
                   </div>
-                  <div className="flex-1 max-w-sm bg-zinc-800/80 h-2 rounded-full overflow-hidden border border-white/5">
+                  <div className="flex-1 max-w-sm bg-[#282828] h-2 rounded-full overflow-hidden border border-white/5">
                     <div
-                      className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-500 shadow-[0_0_12px_#6366f1]"
+                      className="h-full bg-[#1DB954] transition-all duration-500"
                       style={{ width: `${tracks.length > 0 ? (tracks.filter(t => t.done).length / tracks.length) * 100 : 0}%` }}
                     />
                   </div>
@@ -3243,13 +3213,13 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
               {/* Table */}
               <div className="flex-1 overflow-y-auto px-6 py-2 pb-32">
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-white/5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider items-center">
+                <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-[#242424] text-[11px] font-semibold text-[#b3b3b3] uppercase tracking-wider items-center">
                   <div className="col-span-1 text-center flex items-center justify-center gap-1.5">
                     <input
                       type="checkbox"
                       checked={tracks.length > 0 && selectedIndices.length === tracks.length}
                       onChange={toggleSelectAll}
-                      className="rounded accent-indigo-500 cursor-pointer w-3.5 h-3.5"
+                      className="rounded accent-[#1DB954] cursor-pointer w-3.5 h-3.5"
                       title="Select All"
                     />
                     <span>#</span>
@@ -3262,11 +3232,11 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   <div className="col-span-2 text-right">Actions</div>
                 </div>
 
-                <div className="py-2 space-y-1">
+                <div className="py-2 space-y-0.5">
                   {tracks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-28 text-zinc-600">
-                      <p className="font-bold text-zinc-400 text-sm">Queue is empty</p>
-                      <p className="text-xs text-zinc-600 mt-1">Paste a Spotify or Beatport URL (Track, Release, Chart, Top 100) to load songs</p>
+                    <div className="flex flex-col items-center justify-center py-28 text-[#727272]">
+                      <p className="font-bold text-[#b3b3b3] text-sm">Queue is empty</p>
+                      <p className="text-xs text-[#727272] mt-1">Paste a Spotify or Beatport URL (Track, Release, Chart, Top 100) to load songs</p>
                     </div>
                   ) : (
                     <AnimatePresence>
@@ -3278,16 +3248,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                           onContextMenu={(e) => handleOpenContextMenu(e, t, 'queue', idx, tracks)}
-                          className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
-                            isSameTrack(activeTrack, t) ? 'bg-indigo-500/10 border-indigo-500/30' : ''
+                          className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-lg hover:bg-[#282828]/60 transition ${
+                            isSameTrack(activeTrack, t) ? 'bg-[#282828] border-l-2 border-[#1DB954]' : ''
                           }`}
                         >
-                          <div className="col-span-1 text-center text-xs font-mono text-zinc-400 font-bold flex items-center justify-center gap-1.5">
+                          <div className="col-span-1 text-center text-xs font-mono text-[#b3b3b3] font-semibold flex items-center justify-center gap-1.5">
                             <input
                               type="checkbox"
                               checked={selectedIndices.includes(idx)}
                               onChange={() => toggleSelectTrack(idx)}
-                              className="rounded accent-indigo-500 cursor-pointer w-3.5 h-3.5"
+                              className="rounded accent-[#1DB954] cursor-pointer w-3.5 h-3.5"
                             />
                             <span className="w-5 text-right font-bold text-zinc-400">#{idx + 1}</span>
                             <button onClick={() => playTrack(t, tracks, false)} className="text-zinc-400 hover:text-indigo-400 transition p-0.5">
@@ -5330,10 +5300,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               setIsAutoDjEnabled(next);
               showToast(next ? '🤖 Auto-DJ Mix Mode Enabled (Harmonic Continuous)' : 'Auto-DJ Disabled', 'info');
             }}
-            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition flex items-center gap-1 ${
               isAutoDjEnabled
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_#10b98140]'
-                : 'bg-[#18181c] text-zinc-500 border-white/5 hover:text-zinc-300'
+                ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40'
+                : 'bg-[#242424] text-[#b3b3b3] border-[#333333] hover:text-white'
             }`}
             title="Auto-DJ Mode: Automatically mixes harmonic songs continuously"
           >
@@ -5459,9 +5429,9 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-5 right-8 z-50 px-4 py-2.5 rounded-2xl bg-[#1b1b20] border border-white/10 text-xs font-semibold text-white shadow-2xl flex items-center gap-2.5"
+            className="fixed top-5 right-8 z-50 px-4 py-2.5 rounded-full bg-[#181818] border border-[#333333] text-xs font-semibold text-white shadow-2xl flex items-center gap-2.5"
           >
-            <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></span>
+            <span className="w-2 h-2 rounded-full bg-[#1DB954]"></span>
             <span>{notification.msg}</span>
           </motion.div>
         )}
@@ -5946,8 +5916,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     onClick={() => setExportSetCopyAudio(false)}
                     className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition ${
                       !exportSetCopyAudio
-                        ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                        : 'bg-[#1a1a20] border-white/5 hover:border-white/10'
+                        ? 'bg-[#1DB954]/10 border-[#1DB954]/40'
+                        : 'bg-[#181818] border-[#282828] hover:border-[#333333]'
                     }`}
                   >
                     <input
@@ -5955,12 +5925,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       name="exportSetMode"
                       checked={!exportSetCopyAudio}
                       onChange={() => setExportSetCopyAudio(false)}
-                      className="mt-0.5 accent-emerald-500"
+                      className="mt-0.5 accent-[#1DB954]"
                     />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-white text-xs">⚡ Smart DJ Playlist & XML</span>
-                        <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.2 rounded">0 MB Storage (แนะนำ)</span>
+                        <span className="bg-[#1DB954]/20 text-[#1DB954] text-[10px] font-bold px-1.5 py-0.2 rounded">0 MB Storage (แนะนำ)</span>
                       </div>
                       <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
                         สร้างไฟล์เพลย์ลิสต์ <span className="text-white font-mono">.m3u8</span> และ <span className="text-white font-mono">rekordbox.xml</span> (มี 8 Hot Cues A-H + Energy Rating) ชี้ไปยังเพลงเดิม <strong>ไม่ก๊อปปี้ไฟล์เพลงซ้ำ ไม่เปลืองพื้นที่ฮาร์ดดิสก์แม้แต่นิดเดียว!</strong>
@@ -5973,8 +5943,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     onClick={() => setExportSetCopyAudio(true)}
                     className={`p-3 rounded-2xl border flex items-start gap-3 cursor-pointer transition ${
                       exportSetCopyAudio
-                        ? 'bg-indigo-500/10 border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                        : 'bg-[#1a1a20] border-white/5 hover:border-white/10'
+                        ? 'bg-[#282828] border-white/20'
+                        : 'bg-[#181818] border-[#282828] hover:border-[#333333]'
                     }`}
                   >
                     <input
@@ -6601,10 +6571,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     setIsAutoDjEnabled(next);
                     showToast(next ? '🤖 Auto-DJ Mix Mode Enabled' : 'Auto-DJ Disabled', 'info');
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition flex items-center gap-1.5 ${
                     isAutoDjEnabled
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_#10b98140]'
-                      : 'bg-white/5 text-zinc-500 border-white/5 hover:text-white'
+                      ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40'
+                      : 'bg-[#242424] text-[#b3b3b3] border-[#333333] hover:text-white'
                   }`}
                   title="Auto-DJ Mode: Continuous harmonic mixing"
                 >
@@ -6613,10 +6583,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               </div>
 
               {/* Center Group: Prev, Play/Pause, Next */}
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-5">
                 <button
                   onClick={handlePlayPrev}
-                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95 border border-white/5"
+                  className="w-10 h-10 rounded-full text-[#b3b3b3] hover:text-white hover:bg-[#282828] text-base flex items-center justify-center transition active:scale-95"
                   title="Previous Track"
                 >
                   ⏮
@@ -6624,7 +6594,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                 <button
                   onClick={togglePlay}
-                  className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-500 hover:scale-105 active:scale-95 text-white font-bold text-2xl flex items-center justify-center shadow-[0_0_30px_#10b98160] transition"
+                  className="w-14 h-14 rounded-full bg-white hover:bg-[#f0f0f0] hover:scale-105 active:scale-95 text-black font-bold text-2xl flex items-center justify-center transition shadow-none"
                   title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
                 >
                   {isPlaying ? '⏸' : '▶'}
@@ -6632,7 +6602,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                 <button
                   onClick={handlePlayNext}
-                  className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white text-base flex items-center justify-center transition active:scale-95 border border-white/5"
+                  className="w-10 h-10 rounded-full text-[#b3b3b3] hover:text-white hover:bg-[#282828] text-base flex items-center justify-center transition active:scale-95"
                   title="Next Track / Mix Next"
                 >
                   ⏭
@@ -6643,7 +6613,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               <div className="flex items-center gap-3">
                 {/* Volume Section */}
                 <div
-                  className="flex items-center gap-2 bg-[#18181c]/90 border border-white/10 px-3.5 py-2 rounded-2xl backdrop-blur-md shadow-lg"
+                  className="flex items-center gap-2 bg-[#242424] border border-[#333333] px-3.5 py-1.5 rounded-full"
                   onWheel={(e) => {
                     e.preventDefault();
                     changeVolumeStep(e.deltaY < 0 ? 0.05 : -0.05);
@@ -6652,7 +6622,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   {/* Volume Down Button */}
                   <button
                     onClick={() => changeVolumeStep(-0.05)}
-                    className="text-zinc-400 hover:text-white text-xs w-6 h-6 rounded-lg hover:bg-white/5 flex items-center justify-center transition font-bold"
+                    className="text-[#b3b3b3] hover:text-white text-xs w-5 h-5 rounded hover:bg-[#333333] flex items-center justify-center transition font-bold"
                     title="ลดเสียง (-5%)"
                   >
                     -
@@ -6661,7 +6631,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   {/* Dynamic Speaker / Mute Toggle Button */}
                   <button
                     onClick={toggleMute}
-                    className="text-base text-zinc-300 hover:text-white transition p-0.5 hover:scale-110"
+                    className="text-sm text-zinc-300 hover:text-white transition p-0.5 hover:scale-110"
                     title={isMuted || volume === 0 ? 'เปิดเสียง (Unmute - M)' : 'ปิดเสียง (Mute - M)'}
                   >
                     {isMuted || volume === 0 ? '🔇' : volume < 0.35 ? '🔈' : volume < 0.7 ? '🔉' : '🔊'}
@@ -6675,21 +6645,21 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     step="0.01"
                     value={isMuted ? 0 : volume}
                     onChange={handleVolume}
-                    className="w-24 md:w-32 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                    className="w-20 md:w-28 h-1 bg-[#3e3e3e] rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
                     title={`ระดับเสียง: ${Math.round((isMuted ? 0 : volume) * 100)}% (เลื่อนเมาส์หรือกด ↑ / ↓)`}
                   />
 
                   {/* Volume Up Button */}
                   <button
                     onClick={() => changeVolumeStep(0.05)}
-                    className="text-zinc-400 hover:text-white text-xs w-6 h-6 rounded-lg hover:bg-white/5 flex items-center justify-center transition font-bold"
+                    className="text-[#b3b3b3] hover:text-white text-xs w-5 h-5 rounded hover:bg-[#333333] flex items-center justify-center transition font-bold"
                     title="เร่งเสียง (+5%)"
                   >
                     +
                   </button>
 
                   {/* Percentage Badge */}
-                  <span className="text-xs font-mono font-bold text-emerald-400 w-10 text-right">
+                  <span className="text-xs font-mono font-bold text-[#1DB954] w-9 text-right">
                     {isMuted || volume === 0 ? 'MUTE' : `${Math.round(volume * 100)}%`}
                   </span>
                 </div>
@@ -6697,12 +6667,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 {/* Queue Drawer Button */}
                 <button
                   onClick={() => setShowQueueDrawer(true)}
-                  className="relative px-3.5 py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white font-semibold text-xs border border-white/10 transition flex items-center gap-1.5 shadow"
+                  className="relative px-3.5 py-1.5 rounded-full bg-[#242424] hover:bg-[#282828] text-white font-semibold text-xs border border-[#333333] transition flex items-center gap-1.5"
                   title="Open Up Next Queue"
                 >
                   <span>📑 Queue</span>
                   {playQueue.length > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-black font-mono text-[10px] font-bold shadow">
+                    <span className="px-1.5 py-0.2 rounded-full bg-[#1DB954] text-black font-mono text-[10px] font-bold">
                       {playQueue.length}
                     </span>
                   )}
