@@ -335,11 +335,16 @@ async fn sync_library() -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn delete_history_track(filepath: String, delete_file: Option<bool>) -> Result<Value, String> {
+async fn delete_history_track(
+    filepath: Option<String>,
+    track_id: Option<String>,
+    delete_file: Option<bool>,
+) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         run_bridge("delete_history_track", json!({
-            "filepath": filepath,
-            "delete_file": delete_file.unwrap_or(false)
+            "filepath": filepath.unwrap_or_default(),
+            "track_id": track_id,
+            "delete_file": delete_file.unwrap_or(true)
         }))
     })
     .await
@@ -368,11 +373,16 @@ async fn batch_update_tracks(filepaths: Vec<String>, updated_fields: Value) -> R
 }
 
 #[tauri::command]
-async fn batch_delete_tracks(filepaths: Vec<String>, delete_files: Option<bool>) -> Result<Value, String> {
+async fn batch_delete_tracks(
+    filepaths: Option<Vec<String>>,
+    track_ids: Option<Vec<String>>,
+    delete_files: Option<bool>,
+) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         run_bridge("batch_delete_tracks", json!({
-            "filepaths": filepaths,
-            "delete_files": delete_files.unwrap_or(false)
+            "filepaths": filepaths.unwrap_or_default(),
+            "track_ids": track_ids.unwrap_or_default(),
+            "delete_files": delete_files.unwrap_or(true)
         }))
     })
     .await
