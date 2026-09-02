@@ -107,17 +107,24 @@ class CleanerService:
                 if item.get('is_low_quality'):
                     low_quality_tracks.append(item)
 
-                # Check if item is suspect MV audio with skits/dialogue
+                # Check if item is suspect MV audio with skits/dialogue (using strict word boundaries)
                 title_low = (item.get('title') or '').lower()
                 fp_low = (item.get('filepath') or '').lower()
-                has_mv_keyword = any(k in title_low or k in fp_low for k in [
-                    'official music video', 'official video', 'mv', '[mv]', '(mv)', 'm/v',
-                    'music video', 'short film', 'drama ver', 'live at', 'live session'
-                ])
-                if has_mv_keyword:
-                    item_copy = dict(item)
-                    item_copy['mv_warning_reason'] = 'พบชื่อ/แท็กตรงกับ Music Video (อาจมีเสียงพูด/เสียงเอฟเฟกต์แทรก)'
-                    mv_suspect_tracks.append(item_copy)
+                combined_text = f"{title_low} {fp_low}"
+                
+                # Strict regex to avoid matching substrings inside words like "MVRK" or "move"
+                is_mv = bool(re.search(
+                    r'(?:\[|\(|\s|^)(?:official\s+music\s+video|official\s+video|official\s+m/?v|music\s+video|mv|m/v|short\s+film|drama\s+ver|live\s+session|live\s+at|acoustic\s+ver)(?:\]|\)|\s|$)',
+                    combined_text,
+                    flags=re.I
+                ))
+
+                if is_mv:
+                    # Deduplicate by filepath
+                    if not any(x.get('filepath') == item.get('filepath') for x in mv_suspect_tracks):
+                        item_copy = dict(item)
+                        item_copy['mv_warning_reason'] = 'พบชื่อ/แท็กตรงกับ Music Video (อาจมีเสียงพูด/เสียงเอฟเฟกต์แทรก)'
+                        mv_suspect_tracks.append(item_copy)
 
         return {
             'total_duplicates_found': sum(len(c['tracks']) - 1 for c in duplicate_clusters),
