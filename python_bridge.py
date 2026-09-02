@@ -78,14 +78,12 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     elif cmd_name == 'set_output_dir':
         new_dir = payload.get('path', '').strip()
         saved_dir = SettingsService.set_output_dir(new_dir)
-        from src.services.history_service import HistoryService
         HistoryService.sync_downloads_folder(saved_dir)
         return {'result': saved_dir}
 
     elif cmd_name == 'browse_folder':
         selected = SettingsService.browse_folder()
         if selected:
-            from src.services.history_service import HistoryService
             HistoryService.sync_downloads_folder(selected)
         return {'result': selected or output_dir}
 
@@ -122,12 +120,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
 
     elif cmd_name == 'fetch_metadata':
         url = payload.get('url', '').strip()
-        from src.services.beatport_service import BeatportService
-        from src.services.youtube_mixtape_service import YouTubeMixtapeService
-        from src.services.music_sources_service import SoundCloudService, AppleMusicService
-        from src.services.history_service import HistoryService
-        from src.services.music_search_service import MusicSearchService
-
         is_url = url.startswith('http://') or url.startswith('https://') or url.startswith('spotify:')
         if is_url:
             if BeatportService.is_beatport_url(url):

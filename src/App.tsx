@@ -1683,15 +1683,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         showToast('No tracks found for this URL', 'error');
       }
     } catch (err: any) {
-      const errStr = String(err);
-      if (errStr.includes('No module named') || errStr.includes('ModuleNotFoundError') || errStr.includes('Could not find Python') || errStr.includes('requests') || errStr.includes('yt_dlp')) {
-        showToast('ตรวจพบว่าเครื่อง Mac ยังไม่ได้ติดตั้ง Python Modules สำหรับโหลดเพลง', 'error');
-        setSettingsActiveTab('system');
-        setShowSettingsModal(true);
-        handleFetchSystemHealth();
-      } else {
-        showToast('Error analyzing: ' + errStr, 'error');
-      }
+      showToast('Error analyzing: ' + (err?.message || err), 'error');
     } finally {
       setIsAnalyzing(false);
     }
@@ -1799,15 +1791,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         showToast('Could not load YouTube video stream', 'error');
       }
     } catch (e: any) {
-      const errStr = String(e);
-      if (errStr.includes('No module named') || errStr.includes('ModuleNotFoundError') || errStr.includes('Could not find Python') || errStr.includes('requests') || errStr.includes('yt_dlp')) {
-        showToast('ตรวจพบว่าเครื่อง Mac ยังไม่ได้ติดตั้ง Python Modules สำหรับโหลดเพลง', 'error');
-        setSettingsActiveTab('system');
-        setShowSettingsModal(true);
-        handleFetchSystemHealth();
-      } else {
-        showToast('Error extracting YouTube set: ' + errStr, 'error');
-      }
+      showToast('Error extracting YouTube set: ' + (e?.message || e), 'error');
     } finally {
       setIsExtractingYt(false);
     }
