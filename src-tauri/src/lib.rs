@@ -82,9 +82,16 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     let mut python_bins = Vec::new();
     #[cfg(target_os = "windows")]
     {
-        python_bins.push("py".to_string());
-        python_bins.push("python3".to_string());
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            python_bins.push(format!("{}\\Python\\pythoncore-3.11-64\\python.exe", local_app_data));
+            python_bins.push(format!("{}\\Python\\pythoncore-3.12-64\\python.exe", local_app_data));
+            python_bins.push(format!("{}\\Programs\\Python\\Python311\\python.exe", local_app_data));
+            python_bins.push(format!("{}\\Programs\\Python\\Python312\\python.exe", local_app_data));
+            python_bins.push(format!("{}\\Programs\\Python\\Python310\\python.exe", local_app_data));
+        }
         python_bins.push("python".to_string());
+        python_bins.push("python3".to_string());
+        python_bins.push("py".to_string());
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -96,17 +103,19 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
         python_bins.push("python".to_string());
     }
 
+    let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
     let mut last_spawn_err = String::new();
     let mut child_opt = None;
 
     for bin in &python_bins {
         let mut py_cmd = Command::new(bin);
         py_cmd.arg(&script_path)
+            .arg(cmd)
+            .arg(&payload_str)
             .current_dir(&script_dir)
             .env("PYTHONPATH", &script_dir)
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONUNBUFFERED", "1")
-            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -124,17 +133,12 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
         }
     }
 
-    let mut child = child_opt.ok_or_else(|| {
+    let child = child_opt.ok_or_else(|| {
         format!(
             "Could not find Python 3 executable on system. Please ensure Python 3 is installed.\nDetail: {}",
             last_spawn_err
         )
     })?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(req_str.as_bytes()).map_err(|e| e.to_string())?;
-        stdin.write_all(b"\n").map_err(|e| e.to_string())?;
-    }
 
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout);

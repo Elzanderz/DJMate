@@ -5,7 +5,10 @@ import tempfile
 import subprocess
 import yt_dlp
 from typing import List, Dict, Optional
-from shazamio import Shazam
+try:
+    from shazamio import Shazam
+except ImportError:
+    Shazam = None
 from .spotify_service import SpotifyService
 from .genre_classifier_service import GenreClassifierService
 
