@@ -7,38 +7,59 @@ use serde_json::{json, Value};
 use std::os::windows::process::CommandExt;
 
 fn find_bridge_script() -> PathBuf {
-    let mut candidates = vec![
-        PathBuf::from("python_bridge.py"),
-        PathBuf::from("../python_bridge.py"),
-        PathBuf::from(r"C:\Project\music convertor\python_bridge.py"),
-    ];
+    let mut candidates = Vec::new();
 
+    // 1. Check relative to current working directory
+    candidates.push(PathBuf::from("python_bridge.py"));
+    candidates.push(PathBuf::from("../python_bridge.py"));
+    candidates.push(PathBuf::from("resources/python_bridge.py"));
+    candidates.push(PathBuf::from("resources/_up_/python_bridge.py"));
+
+    // 2. Check relative to current executable location (installed app or dev target)
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("python_bridge.py"));
-            candidates.push(parent.join("../Resources/python_bridge.py"));
-            candidates.push(parent.join("../Resources/_up_/python_bridge.py"));
-            candidates.push(parent.join("../../Resources/python_bridge.py"));
-            candidates.push(parent.join("../../../python_bridge.py"));
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join("python_bridge.py"));
+            candidates.push(exe_dir.join("resources").join("python_bridge.py"));
+            candidates.push(exe_dir.join("resources").join("_up_").join("python_bridge.py"));
+            candidates.push(exe_dir.join("_up_").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("Resources").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("Resources").join("_up_").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("..").join("Resources").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("..").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("..").join("..").join("python_bridge.py"));
+            candidates.push(exe_dir.join("..").join("..").join("..").join("..").join("python_bridge.py"));
         }
     }
 
+    // 3. Known dev paths
+    candidates.push(PathBuf::from(r"C:\Project\music convertor\python_bridge.py"));
+
     for c in &candidates {
         if c.exists() {
+            if let Ok(canon) = c.canonicalize() {
+                return canon;
+            }
             return c.clone();
         }
     }
 
-    // Deep search in parent folders / Resources
+    // 4. Recursive search in resources folder
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let res_dir = parent.join("../Resources");
-            if res_dir.exists() {
-                if let Ok(entries) = std::fs::read_dir(&res_dir) {
-                    for entry in entries.flatten() {
-                        let p = entry.path().join("python_bridge.py");
-                        if p.exists() {
-                            return p;
+        if let Some(exe_dir) = exe.parent() {
+            let search_folders = [
+                exe_dir.to_path_buf(),
+                exe_dir.join("resources"),
+                exe_dir.join("..").join("Resources"),
+            ];
+            for folder in &search_folders {
+                if folder.exists() {
+                    if let Ok(entries) = std::fs::read_dir(folder) {
+                        for entry in entries.flatten() {
+                            let p = entry.path().join("python_bridge.py");
+                            if p.exists() {
+                                return p;
+                            }
                         }
                     }
                 }
@@ -46,7 +67,7 @@ fn find_bridge_script() -> PathBuf {
         }
     }
 
-    PathBuf::from("python_bridge.py")
+    PathBuf::from(r"C:\Project\music convertor\python_bridge.py")
 }
 
 fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
