@@ -78,6 +78,7 @@ class CleanerService:
 
         duplicate_clusters = []
         low_quality_tracks = []
+        mv_suspect_tracks = []
 
         for key, cluster in groups.items():
             # Check if cluster has duplicates
@@ -106,12 +107,26 @@ class CleanerService:
                 if item.get('is_low_quality'):
                     low_quality_tracks.append(item)
 
+                # Check if item is suspect MV audio with skits/dialogue
+                title_low = (item.get('title') or '').lower()
+                fp_low = (item.get('filepath') or '').lower()
+                has_mv_keyword = any(k in title_low or k in fp_low for k in [
+                    'official music video', 'official video', 'mv', '[mv]', '(mv)', 'm/v',
+                    'music video', 'short film', 'drama ver', 'live at', 'live session'
+                ])
+                if has_mv_keyword:
+                    item_copy = dict(item)
+                    item_copy['mv_warning_reason'] = 'พบชื่อ/แท็กตรงกับ Music Video (อาจมีเสียงพูด/เสียงเอฟเฟกต์แทรก)'
+                    mv_suspect_tracks.append(item_copy)
+
         return {
             'total_duplicates_found': sum(len(c['tracks']) - 1 for c in duplicate_clusters),
             'clusters_count': len(duplicate_clusters),
             'clusters': duplicate_clusters,
             'low_quality_count': len(low_quality_tracks),
-            'low_quality_tracks': low_quality_tracks
+            'low_quality_tracks': low_quality_tracks,
+            'mv_suspect_count': len(mv_suspect_tracks),
+            'mv_suspect_tracks': mv_suspect_tracks
         }
 
     @classmethod
@@ -140,3 +155,44 @@ class CleanerService:
             'deleted_count': deleted_count,
             'freed_mb': round(freed_bytes / (1024 * 1024), 2)
         }
+
+    @classmethod
+    def redownload_studio_master(cls, filepath: str) -> Dict:
+        """
+        Re-downloads a clean studio master (Topic/Audio) for a track and replaces the old MV audio file.
+        """
+        from src.services.history_service import HistoryService
+        from src.services.downloader_service import DownloaderService
+        from src.services.settings_service import SettingsService
+
+        tracks = HistoryService.get_all()
+        target_track = next((t for t in tracks if t.get('filepath') == filepath), None)
+        if not target_track:
+            filename = os.path.basename(filepath)
+            base = os.path.splitext(filename)[0]
+            parts = base.split(' - ', 1)
+            if len(parts) == 2:
+                target_track = {'artist': parts[0].strip(), 'title': parts[1].strip(), 'filepath': filepath}
+            else:
+                target_track = {'title': base, 'artist': '', 'filepath': filepath}
+
+        output_dir = os.path.dirname(filepath) if os.path.exists(filepath) else SettingsService.get_output_dir()
+
+        # If old file exists, remove it first to force re-download of clean studio version
+        if filepath and os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass
+
+        new_path = DownloaderService.download_track(
+            target_track,
+            output_dir=output_dir,
+            audio_format='mp3',
+            audio_quality='320'
+        )
+
+        if new_path and os.path.exists(new_path):
+            HistoryService.sync_downloads_folder(output_dir)
+            return {'success': True, 'new_filepath': new_path}
+        return {'success': False, 'error': 'Failed to download studio master'}

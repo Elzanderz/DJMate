@@ -245,6 +245,12 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         res = CleanerService.clean_duplicates_batch(filepaths)
         return {'result': res}
 
+    elif cmd_name == 'redownload_studio_master':
+        from src.services.cleaner_service import CleanerService
+        filepath = payload.get('filepath', '')
+        res = CleanerService.redownload_studio_master(filepath)
+        return {'result': res}
+
     elif cmd_name == 'find_mashup_matches':
         from src.services.mashup_service import MashupService
         from src.services.history_service import HistoryService

@@ -438,6 +438,15 @@ async fn clean_duplicates_batch(filepaths: Vec<String>) -> Result<Value, String>
 }
 
 #[tauri::command]
+async fn redownload_studio_master(filepath: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_bridge("redownload_studio_master", json!({ "filepath": filepath }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn find_mashup_matches(tracks: Option<Value>, min_score: Option<i64>, limit: Option<i64>) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         run_bridge("find_mashup_matches", json!({
@@ -540,6 +549,7 @@ pub fn run() {
             build_gig_storage,
             scan_duplicates,
             clean_duplicates_batch,
+            redownload_studio_master,
             find_mashup_matches,
             export_rekordbox,
             export_m3u8,

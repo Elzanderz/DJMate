@@ -250,12 +250,14 @@ export default function App() {
   const [mashupPairs, setMashupPairs] = useState<any[]>([]);
   const [isFindingMashups, setIsFindingMashups] = useState(false);
 
-  // Duplicate & Quality Cleaner State
+  // Duplicate, MV Audio & Quality Cleaner State
   const [showCleanerModal, setShowCleanerModal] = useState(false);
   const [showCleanConfirmModal, setShowCleanConfirmModal] = useState(false);
+  const [cleanerActiveTab, setCleanerActiveTab] = useState<'duplicates' | 'mv_audio' | 'low_quality'>('duplicates');
   const [duplicateData, setDuplicateData] = useState<any>(null);
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+  const [isRedownloadingStudio, setIsRedownloadingStudio] = useState<string | null>(null);
 
   // Input & Queue State
   const [url, setUrl] = useState('');
@@ -534,6 +536,25 @@ export default function App() {
       showToast('Cleaner error: ' + e, 'error');
     } finally {
       setIsCleaningDuplicates(false);
+    }
+  };
+
+  const handleRedownloadStudio = async (filepath: string) => {
+    setIsRedownloadingStudio(filepath);
+    showToast('กำลังค้นหาและดาวน์โหลด Studio Master (Clean Audio)...', 'info');
+    try {
+      const res: any = await invokeBackend('redownload_studio_master', { filepath });
+      if (res && res.success) {
+        showToast('ดาวน์โหลด Studio Master คุณภาพสูง (320kbps) แทนที่เรียบร้อย!', 'success');
+        refreshLibrary();
+        handleOpenCleanerModal();
+      } else {
+        showToast('ไม่สามารถดาวน์โหลดเวอร์ชัน Studio ได้: ' + (res?.error || 'Unknown error'), 'error');
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด: ' + e, 'error');
+    } finally {
+      setIsRedownloadingStudio(null);
     }
   };
 
@@ -5585,75 +5606,209 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   </div>
                 </div>
 
-            {/* Clusters List */}
-                <div className="space-y-3">
-                  {duplicateData.clusters.length === 0 ? (
-                    <div className="p-10 text-center text-zinc-500 text-xs">
-                      ✨ Great news! No duplicate files found in your library.
-                    </div>
-                  ) : (
-                    duplicateData.clusters.map((c: any, cIdx: number) => (
-                      <div key={cIdx} className="p-3.5 bg-[#101013] rounded-2xl border border-white/5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-bold text-white truncate">{c.title} • <span className="text-zinc-400 font-normal">{c.artist}</span></p>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-bold">
-                            {c.count} copies
-                          </span>
-                        </div>
+                {/* 3 Interactive Mode Tabs */}
+                <div className="flex items-center gap-2 border-b border-white/5 pb-2 text-xs font-bold">
+                  <button
+                    onClick={() => setCleanerActiveTab('duplicates')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      cleanerActiveTab === 'duplicates'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>🧹 ไฟล์เพลงซ้ำ</span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300">
+                      {duplicateData.clusters_count}
+                    </span>
+                  </button>
 
-                        <div className="space-y-1.5 text-xs">
-                          {c.tracks.map((t: any, tIdx: number) => {
-                            const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
-                            const folderName = t.filepath ? t.filepath.split(/[/\\]/).slice(-2, -1)[0] : (t.playlist_name || '');
+                  <button
+                    onClick={() => setCleanerActiveTab('mv_audio')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      cleanerActiveTab === 'mv_audio'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>🎧 ตรวจจับไฟล์จาก Music Video</span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 font-bold">
+                      {duplicateData.mv_suspect_count || 0}
+                    </span>
+                  </button>
 
-                            return (
-                              <div
-                                key={tIdx}
-                                className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 ${
-                                  t.is_recommended_keep
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
-                                    : 'bg-[#18181c] border-white/5 text-zinc-400'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  <span
-                                    className="text-[10px] font-bold px-2 py-0.5 rounded font-mono flex-shrink-0"
-                                    style={{
-                                      backgroundColor: t.is_recommended_keep ? '#10b98125' : '#f43f5e20',
-                                      color: t.is_recommended_keep ? '#10b981' : '#f43f5e'
-                                    }}
-                                  >
-                                    {t.is_recommended_keep ? '✓ KEEP' : '✕ DUPE'}
-                                  </span>
-
-                                  {folderName && (
-                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/5 text-zinc-400 border border-white/5 flex-shrink-0 flex items-center gap-1">
-                                      📁 {folderName}
-                                    </span>
-                                  )}
-
-                                  <span
-                                    className="text-xs font-semibold truncate text-zinc-200"
-                                    title={t.filepath}
-                                  >
-                                    {filename}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2 font-mono text-[10px] flex-shrink-0">
-                                  <span className="px-1.5 py-0.5 rounded bg-white/10 text-zinc-200 font-bold">
-                                    {t.bitrate_kbps} kbps
-                                  </span>
-                                  <span className="text-zinc-400">{t.size_mb} MB</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                  <button
+                    onClick={() => setCleanerActiveTab('low_quality')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      cleanerActiveTab === 'low_quality'
+                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>📉 คุณภาพบิตเรตต่ำ</span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300">
+                      {duplicateData.low_quality_count || 0}
+                    </span>
+                  </button>
                 </div>
+
+                {/* TAB 1: DUPLICATES */}
+                {cleanerActiveTab === 'duplicates' && (
+                  <div className="space-y-3">
+                    {duplicateData.clusters.length === 0 ? (
+                      <div className="p-10 text-center text-zinc-500 text-xs">
+                        ✨ ยอดเยี่ยม! ไม่พบไฟล์เพลงที่ซ้ำกันในคลังเพลง
+                      </div>
+                    ) : (
+                      duplicateData.clusters.map((c: any, cIdx: number) => (
+                        <div key={cIdx} className="p-3.5 bg-[#101013] rounded-2xl border border-white/5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-white truncate">{c.title} • <span className="text-zinc-400 font-normal">{c.artist}</span></p>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-bold">
+                              {c.count} copies
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 text-xs">
+                            {c.tracks.map((t: any, tIdx: number) => {
+                              const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
+                              const folderName = t.filepath ? t.filepath.split(/[/\\]/).slice(-2, -1)[0] : (t.playlist_name || '');
+
+                              return (
+                                <div
+                                  key={tIdx}
+                                  className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 ${
+                                    t.is_recommended_keep
+                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
+                                      : 'bg-[#18181c] border-white/5 text-zinc-400'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span
+                                      className="text-[10px] font-bold px-2 py-0.5 rounded font-mono flex-shrink-0"
+                                      style={{
+                                        backgroundColor: t.is_recommended_keep ? '#10b98125' : '#f43f5e20',
+                                        color: t.is_recommended_keep ? '#10b981' : '#f43f5e'
+                                      }}
+                                    >
+                                      {t.is_recommended_keep ? '✓ KEEP' : '✕ DUPE'}
+                                    </span>
+
+                                    {folderName && (
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/5 text-zinc-400 border border-white/5 flex-shrink-0 flex items-center gap-1">
+                                        📁 {folderName}
+                                      </span>
+                                    )}
+
+                                    <span
+                                      className="text-xs font-semibold truncate text-zinc-200"
+                                      title={t.filepath}
+                                    >
+                                      {filename}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 font-mono text-[10px] flex-shrink-0">
+                                    <span className="px-1.5 py-0.5 rounded bg-white/10 text-zinc-200 font-bold">
+                                      {t.bitrate_kbps} kbps
+                                    </span>
+                                    <span className="text-zinc-400">{t.size_mb} MB</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 2: NON-STUDIO / MV AUDIO DETECTOR */}
+                {cleanerActiveTab === 'mv_audio' && (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-2">
+                      <span className="text-base flex-shrink-0">⚠️</span>
+                      <p className="leading-relaxed">
+                        ระบบตรวจพบเพลงด้านล่างที่อาจเป็นไฟล์เสียงที่มาจาก <strong>Music Video (MV)</strong> ซึ่งมักจะมีเสียงพูด อินโทรละคร หรือเสียงเอฟเฟกต์บรรยากาศแทรก ไม่เหมาะกับการเปิดดีเจ คุณสามารถกดปุ่ม <strong>⚡ โหลดแทนที่ด้วย Studio Master</strong> เพื่อดาวน์โหลดเสียง Official Studio Master มาแทนที่ได้ทันที
+                      </p>
+                    </div>
+
+                    {(!duplicateData.mv_suspect_tracks || duplicateData.mv_suspect_tracks.length === 0) ? (
+                      <div className="p-10 text-center text-zinc-500 text-xs">
+                        ✨ สะอาดมาก! ไม่พบไฟล์เพลงที่มาจาก Music Video ในเครื่อง
+                      </div>
+                    ) : (
+                      duplicateData.mv_suspect_tracks.map((t: any, idx: number) => {
+                        const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
+                        const isRedownloading = isRedownloadingStudio === t.filepath;
+
+                        return (
+                          <div key={idx} className="p-3.5 bg-[#101013] rounded-2xl border border-rose-500/20 flex items-center justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                  ⚠️ อาจมีเสียงแทรก
+                                </span>
+                                <h4 className="text-xs font-bold text-white truncate">{t.title}</h4>
+                              </div>
+                              <p className="text-[11px] text-zinc-400 mt-0.5 truncate">{t.artist || 'Unknown Artist'} • <span className="font-mono text-[10px] text-zinc-500">{filename}</span></p>
+                              <p className="text-[10px] text-rose-400/80 mt-1">{t.mv_warning_reason || 'ตรวจพบชื่อ/แท็ก Music Video'}</p>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                disabled={isRedownloading}
+                                onClick={() => handleRedownloadStudio(t.filepath)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                                title="ดาวน์โหลดเวอร์ชัน Official Studio Master (320kbps) มาแทนที่ไฟล์นี้ทันที"
+                              >
+                                {isRedownloading ? <span className="animate-spin text-xs">↻</span> : <span>⚡</span>}
+                                <span>{isRedownloading ? 'กำลังโหลด Studio...' : 'โหลดแทนที่ด้วย Studio Master'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: LOW QUALITY TRACKS */}
+                {cleanerActiveTab === 'low_quality' && (
+                  <div className="space-y-2">
+                    {(!duplicateData.low_quality_tracks || duplicateData.low_quality_tracks.length === 0) ? (
+                      <div className="p-10 text-center text-zinc-500 text-xs">
+                        ✨ คุณภาพสมบูรณ์แบบ! เพลงทั้งหมดในคลังเป็นแบบ High Bitrate (320kbps / Lossless)
+                      </div>
+                    ) : (
+                      duplicateData.low_quality_tracks.map((t: any, idx: number) => {
+                        const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
+                        const isRedownloading = isRedownloadingStudio === t.filepath;
+
+                        return (
+                          <div key={idx} className="p-3 bg-[#101013] rounded-2xl border border-white/5 flex items-center justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-white truncate">{t.title} • <span className="text-zinc-400 font-normal">{t.artist}</span></p>
+                              <p className="text-[10px] text-zinc-500 font-mono truncate">{filename}</p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                {t.bitrate_kbps} kbps ({t.size_mb} MB)
+                              </span>
+                              <button
+                                disabled={isRedownloading}
+                                onClick={() => handleRedownloadStudio(t.filepath)}
+                                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg transition disabled:opacity-50"
+                              >
+                                {isRedownloading ? '↻' : '⚡ Upgrade 320k'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             ) : null}
 
