@@ -7,11 +7,20 @@ use serde_json::{json, Value};
 use std::os::windows::process::CommandExt;
 
 fn find_bridge_script() -> PathBuf {
-    let candidates = [
+    let mut candidates = vec![
         PathBuf::from("python_bridge.py"),
         PathBuf::from("../python_bridge.py"),
         PathBuf::from(r"C:\Project\music convertor\python_bridge.py"),
     ];
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidates.push(parent.join("python_bridge.py"));
+            candidates.push(parent.join("../Resources/python_bridge.py"));
+            candidates.push(parent.join("../../../python_bridge.py"));
+        }
+    }
+
     for c in &candidates {
         if c.exists() {
             return c.clone();
@@ -28,7 +37,11 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     });
     let req_str = serde_json::to_string(&req).map_err(|e| e.to_string())?;
 
-    let mut py_cmd = Command::new("py");
+    let primary_bin = if cfg!(target_os = "windows") { "py" } else { "python3" };
+    let secondary_bin = if cfg!(target_os = "windows") { "python3" } else { "python" };
+    let tertiary_bin = if cfg!(target_os = "windows") { "python" } else { "py" };
+
+    let mut py_cmd = Command::new(primary_bin);
     py_cmd.arg(&script_path)
         .env("PYTHONIOENCODING", "utf-8")
         .stdin(Stdio::piped())
@@ -40,7 +53,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
 
     let mut child = py_cmd.spawn()
         .or_else(|_| {
-            let mut fallback = Command::new("python3");
+            let mut fallback = Command::new(secondary_bin);
             fallback.arg(&script_path)
                 .env("PYTHONIOENCODING", "utf-8")
                 .stdin(Stdio::piped())
@@ -51,7 +64,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
             fallback.spawn()
         })
         .or_else(|_| {
-            let mut fallback = Command::new("python");
+            let mut fallback = Command::new(tertiary_bin);
             fallback.arg(&script_path)
                 .env("PYTHONIOENCODING", "utf-8")
                 .stdin(Stdio::piped())
