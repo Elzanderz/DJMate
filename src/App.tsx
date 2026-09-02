@@ -1607,7 +1607,15 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         showToast('No tracks found for this URL', 'error');
       }
     } catch (err: any) {
-      showToast('Error analyzing: ' + err, 'error');
+      const errStr = String(err);
+      if (errStr.includes('No module named') || errStr.includes('ModuleNotFoundError') || errStr.includes('Could not find Python') || errStr.includes('requests') || errStr.includes('yt_dlp')) {
+        showToast('ตรวจพบว่าเครื่อง Mac ยังไม่ได้ติดตั้ง Python Modules สำหรับโหลดเพลง', 'error');
+        setSettingsActiveTab('system');
+        setShowSettingsModal(true);
+        handleFetchSystemHealth();
+      } else {
+        showToast('Error analyzing: ' + errStr, 'error');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -1714,8 +1722,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       } else {
         showToast('Could not load YouTube video stream', 'error');
       }
-    } catch (e) {
-      showToast('Error extracting YouTube set', 'error');
+    } catch (e: any) {
+      const errStr = String(e);
+      if (errStr.includes('No module named') || errStr.includes('ModuleNotFoundError') || errStr.includes('Could not find Python') || errStr.includes('requests') || errStr.includes('yt_dlp')) {
+        showToast('ตรวจพบว่าเครื่อง Mac ยังไม่ได้ติดตั้ง Python Modules สำหรับโหลดเพลง', 'error');
+        setSettingsActiveTab('system');
+        setShowSettingsModal(true);
+        handleFetchSystemHealth();
+      } else {
+        showToast('Error extracting YouTube set: ' + errStr, 'error');
+      }
     } finally {
       setIsExtractingYt(false);
     }
@@ -8642,27 +8658,59 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   </div>
                 )}
 
-                {/* macOS Helper Box */}
-                <div className="p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-2">
-                  <div className="flex items-center gap-2 font-bold text-indigo-300">
-                    <span>💡</span>
-                    <span>สำหรับผู้ใช้ Mac หากติดปัญหาดาวน์โหลดเพลง:</span>
+                {/* macOS & Windows First-Time Setup Walkthrough Box */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-black/40 border border-indigo-500/30 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-indigo-300 text-xs">
+                    <span>🍏</span>
+                    <span>คู่มือการติดตั้งครั้งแรกสำหรับผู้ใช้ Mac (ทำเพียงครั้งเดียว):</span>
                   </div>
-                  <p className="text-[11px] text-zinc-300 leading-relaxed">
-                    เปิด Terminal บน Mac แล้วคัดลอกคำสั่งนี้ไปวางเพื่อติดตั้งโมดูลที่จำเป็นทั้งหมด:
-                  </p>
-                  <div className="flex items-center gap-2 bg-black/60 p-2 rounded-xl border border-white/5 font-mono text-[11px] text-emerald-400">
-                    <span className="flex-1 truncate">pip3 install yt-dlp mutagen requests urllib3 pillow numpy</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText('pip3 install yt-dlp mutagen requests urllib3 pillow numpy');
-                        showToast('คัดลอกคำสั่ง Terminal เรียบร้อยแล้ว!', 'success');
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[10px] transition shrink-0"
-                    >
-                      คัดลอก
-                    </button>
+                  
+                  <div className="space-y-2 text-[11px] text-zinc-300">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600/40 text-indigo-300 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                      <p>กดปุ่ม <strong>Cmd + Space</strong> บนคีย์บอร์ด พิมพ์ว่า <strong>Terminal</strong> แล้วกด Enter</p>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600/40 text-indigo-300 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="mb-1">คัดลอกคำสั่งนี้ไปวางใน Terminal แล้วกด Enter (ใช้เวลาประมาณ 10-15 วินาที):</p>
+                        <div className="flex items-center gap-2 bg-black/80 p-2 rounded-xl border border-white/10 font-mono text-[11px] text-emerald-400">
+                          <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy');
+                              showToast('คัดลอกคำสั่ง Terminal เรียบร้อยแล้ว!', 'success');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[10px] transition shrink-0 cursor-pointer"
+                          >
+                            คัดลอก
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600/40 text-indigo-300 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                      <p>เมื่อ Terminal ทำงานเสร็จ กลับมาที่ DJmate แล้วกดวิเคราะห์ / ดาวน์โหลดเพลงได้ทันที!</p>
+                    </div>
                   </div>
+
+                  <details className="pt-1 text-[10px] text-zinc-400">
+                    <summary className="hover:text-zinc-200 transition cursor-pointer select-none">💡 หาก Terminal ขึ้นเตือนเรื่อง externally-managed-environment</summary>
+                    <div className="mt-1.5 flex items-center gap-2 bg-black/80 p-2 rounded-xl border border-white/5 font-mono text-emerald-400">
+                      <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy --break-system-packages</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy --break-system-packages');
+                          showToast('คัดลอกคำสั่งเรียบร้อยแล้ว!', 'success');
+                        }}
+                        className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[9px] transition shrink-0"
+                      >
+                        คัดลอก
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </div>
             )}
