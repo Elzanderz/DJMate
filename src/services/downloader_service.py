@@ -49,15 +49,18 @@ class DownloaderService:
         clean_core = re.sub(r'\s*\[[^\]]*\]', '', clean_core)
         clean_core = ' '.join(clean_core.split()).strip().rstrip('. ')
 
-        # Priority 1: Official Topic release (YouTube Music clean studio stream)
+        # Priority 1: Official Topic / Audio / Lyrics (Clean Studio Masters)
         if artist and title:
             candidates.append(f"{artist} {title} Topic")
             candidates.append(f"{artist} - {title} Official Audio")
             candidates.append(f"{artist} - {title} Audio")
+            candidates.append(f"{artist} - {title} Lyrics")
+            candidates.append(f"{artist} - {title} Lyric Video")
             candidates.append(f"{artist} - {title}")
         elif clean_core:
             candidates.append(f"{clean_core} Topic")
             candidates.append(f"{clean_core} Official Audio")
+            candidates.append(f"{clean_core} Lyrics")
             candidates.append(clean_core)
 
         # Priority 2: Custom search query if provided
@@ -352,57 +355,80 @@ class DownloaderService:
                     print(f"[DownloaderService] Direct stream download fallback: {direct_err}")
                     last_error = direct_err
 
-            # 2. Multi-Level Query Search Fallback with Studio Audio Ranking (if not direct)
+            # 2. Multi-Level Global Query Search Pool with Strict Studio Master Ranking
             if not download_success:
                 search_candidates = cls.generate_search_candidates(track_info)
+                target_dur_sec = 0.0
+                if track_info.get('duration_ms'):
+                    try: target_dur_sec = float(track_info['duration_ms']) / 1000.0
+                    except Exception: pass
+                elif track_info.get('duration'):
+                    try: target_dur_sec = float(track_info['duration'])
+                    except Exception: pass
 
-                for query_idx, query_str in enumerate(search_candidates):
-                    try:
-                        if progress_callback and query_idx > 0:
-                            progress_callback(10.0, f'Searching Studio Master stream (fallback #{query_idx+1})...')
+                all_collected_entries = []
+                seen_vids = set()
 
-                        target_url = None
+                flat_opts = {
+                    'quiet': True,
+                    'no_warnings': True,
+                    'extract_flat': True,
+                }
+
+                if progress_callback:
+                    progress_callback(10.0, 'Searching for DJ Studio Master (filtering out MVs)...')
+
+                # Step A: Collect candidates across top search queries
+                with yt_dlp.YoutubeDL(flat_opts) as ydl_flat:
+                    for query_idx, query_str in enumerate(search_candidates[:5]):
                         try:
-                            flat_opts = {
-                                'quiet': True,
-                                'no_warnings': True,
-                                'extract_flat': True,
-                            }
-                            with yt_dlp.YoutubeDL(flat_opts) as ydl_flat:
-                                search_res = ydl_flat.extract_info(f'ytsearch5:{query_str}', download=False)
-                                if search_res:
-                                    entries = search_res.get('entries', [])
-                                    if entries:
-                                        target_dur_sec = 0.0
-                                        if track_info.get('duration_ms'):
-                                            try: target_dur_sec = float(track_info['duration_ms']) / 1000.0
-                                            except Exception: pass
-                                        elif track_info.get('duration'):
-                                            try: target_dur_sec = float(track_info['duration'])
-                                            except Exception: pass
-
-                                        scored_entries = sorted(
-                                            entries,
-                                            key=lambda e: cls.score_studio_entry(e, artist=artist, title=title, target_duration_sec=target_dur_sec),
-                                            reverse=True
+                            search_res = ydl_flat.extract_info(f'ytsearch5:{query_str}', download=False)
+                            if search_res:
+                                for entry in search_res.get('entries', []):
+                                    vid = entry.get('id')
+                                    if vid and vid not in seen_vids:
+                                        seen_vids.add(vid)
+                                        entry['studio_score'] = cls.score_studio_entry(
+                                            entry,
+                                            artist=artist,
+                                            title=title,
+                                            target_duration_sec=target_dur_sec
                                         )
-                                        best_entry = scored_entries[0]
-                                        if best_entry and best_entry.get('id'):
-                                            target_url = f"https://www.youtube.com/watch?v={best_entry['id']}"
-                        except Exception:
-                            target_url = None
+                                        all_collected_entries.append(entry)
+                        except Exception as q_err:
+                            print(f"[DownloaderService] Search notice for '{query_str}': {q_err}")
 
-                        if not target_url:
-                            target_url = f'ytsearch1:{query_str}'
+                # Step B: Sort all entries globally by studio score (Clean Audio / Topic / Exact duration > 0 first)
+                all_collected_entries.sort(key=lambda e: e.get('studio_score', -999), reverse=True)
 
+                # Step C: Try downloading top entries in ranked order
+                for entry_idx, best_entry in enumerate(all_collected_entries):
+                    if not best_entry.get('id'):
+                        continue
+                    vid_url = f"https://www.youtube.com/watch?v={best_entry['id']}"
+                    try:
+                        if progress_callback:
+                            progress_callback(15.0, f'Downloading Clean Studio Stream [{best_entry.get("duration", 0)}s | Score: {best_entry.get("studio_score", 0)}]...')
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                            info = ydl.extract_info(target_url, download=True)
+                            info = ydl.extract_info(vid_url, download=True)
                             if info:
                                 download_success = True
                                 break
-                    except Exception as e:
-                        last_error = e
+                    except Exception as dl_err:
+                        print(f"[DownloaderService] Candidate download fallback: {dl_err}")
+                        last_error = dl_err
                         continue
+
+                # Final fallback if flat search returned nothing
+                if not download_success:
+                    fallback_q = search_candidates[0] if search_candidates else f"{artist} {title}"
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            info = ydl.extract_info(f'ytsearch1:{fallback_q}', download=True)
+                            if info:
+                                download_success = True
+                    except Exception as fb_err:
+                        last_error = fb_err
 
             # Locate actual converted file
             actual_file = target_file
