@@ -307,19 +307,19 @@ class HistoryService:
                     t['playlist_name'] = cur_playlist
                     needs_save = True
 
-                # Update source badge if appropriate
-                if cur_playlist:
-                    if 'beatport' in cur_playlist.lower() or 'fresh' in cur_playlist.lower() or 'pop' in cur_playlist.lower():
+                # Update source badge accurately (preserve original source if set)
+                orig_source = t.get('source')
+                if not orig_source or orig_source in ('Beatport', 'Library', 'Playlist'):
+                    if cur_playlist and 'beatport' in cur_playlist.lower():
                         t['source'] = 'Beatport'
-                    elif 'spotify' in cur_playlist.lower():
-                        t['source'] = 'Spotify'
-                    elif 'youtube' in cur_playlist.lower():
+                    elif cur_playlist and 'youtube' in cur_playlist.lower():
                         t['source'] = 'YouTube'
+                    elif cur_playlist and 'apple' in cur_playlist.lower():
+                        t['source'] = 'Apple Music'
+                    elif orig_source in ('Spotify', 'Apple Music', 'Deezer', 'SoundCloud', 'YouTube'):
+                        t['source'] = orig_source
                     else:
-                        t['source'] = 'Playlist'
-                else:
-                    if not t.get('source') or t.get('source') == 'Playlist':
-                        t['source'] = 'Library'
+                        t['source'] = 'Spotify'
 
                 # Backfill cover if missing
                 if not t.get('cover_url'):
@@ -377,7 +377,7 @@ class HistoryService:
 
             cover_url = cls.extract_cover(abs_fp, artist, title)
             playlist_name = file_info['playlist_name']
-            source = 'Beatport' if ('beatport' in playlist_name.lower() or 'pop' in playlist_name.lower() or 'fresh' in playlist_name.lower()) else 'Spotify' if 'spotify' in playlist_name.lower() else 'YouTube' if 'youtube' in playlist_name.lower() else ('Playlist' if playlist_name else 'Library')
+            source = 'Beatport' if 'beatport' in playlist_name.lower() else 'YouTube' if 'youtube' in playlist_name.lower() else 'Apple Music' if 'apple' in playlist_name.lower() else 'Spotify'
 
             color = CAMELOT_COLORS.get(camelot, '#fb923c')
             new_item = {
