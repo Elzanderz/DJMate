@@ -351,14 +351,47 @@ fn open_folder(path: Option<String>, playlist_name: Option<String>, playlistName
 
 #[tauri::command]
 async fn browse_folder() -> Result<Value, String> {
-    let dialog = rfd::AsyncFileDialog::new()
-        .set_title("เลือกโฟลเดอร์สำหรับจัดเก็บเพลง DJMate");
+    let chosen_path = tauri::async_runtime::spawn_blocking(|| -> Result<Option<String>, String> {
+        #[cfg(target_os = "macos")]
+        {
+            let script = r#"
+                tell application "System Events"
+                    activate
+                end tell
+                set chosen to choose folder with prompt "เลือกโฟลเดอร์สำหรับจัดเก็บเพลง DJMate"
+                return POSIX path of chosen
+            "#;
+            let output = Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .output()
+                .map_err(|e| format!("Failed to launch macOS folder dialog: {}", e))?;
 
-    if let Some(folder) = dialog.pick_folder().await {
-        let mut path_str = folder.path().to_string_lossy().to_string();
-        if path_str.starts_with(r"\\?\") {
-            path_str = path_str[4..].to_string();
+            if output.status.success() {
+                let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !s.is_empty() {
+                    return Ok(Some(s));
+                }
+            }
+            return Ok(None);
         }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            if let Some(folder) = rfd::FileDialog::new().set_title("เลือกโฟลเดอร์สำหรับจัดเก็บเพลง DJMate").pick_folder() {
+                let mut path_str = folder.to_string_lossy().to_string();
+                if path_str.starts_with(r"\\?\") {
+                    path_str = path_str[4..].to_string();
+                }
+                return Ok(Some(path_str));
+            }
+            return Ok(None);
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    if let Some(path_str) = chosen_path {
         let res = tauri::async_runtime::spawn_blocking(move || {
             run_bridge("set_output_dir", json!({ "path": &path_str }))
         })
