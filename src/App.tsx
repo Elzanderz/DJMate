@@ -284,6 +284,22 @@ export default function App() {
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
 
+  const [isAutoInstalling, setIsAutoInstalling] = useState(false);
+
+  const handleAutoInstallModules = async () => {
+    setIsAutoInstalling(true);
+    showToast('กำลังติดตั้งโมดูล Python (Pillow, NumPy, FFmpeg, etc.) ในพื้นหลัง...', 'info');
+    try {
+      await invokeBackend('install_missing_modules');
+      showToast('✓ ติดตั้งโมดูลสำเร็จเรียบร้อยแล้ว!', 'success');
+      await handleFetchSystemHealth();
+    } catch (e: any) {
+      showToast('การติดตั้งเกิดข้อผิดพลาด: ' + (e?.message || e), 'error');
+    } finally {
+      setIsAutoInstalling(false);
+    }
+  };
+
   const handleFetchSystemHealth = async () => {
     setIsCheckingHealth(true);
     try {
@@ -8873,7 +8889,17 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                     {systemHealth.modules && (
                       <div>
-                        <span className="font-bold text-zinc-300 block mb-2">โมดูลที่จำเป็นสำหรับดาวน์โหลดและวิเคราะห์เพลง:</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-zinc-300 text-xs">โมดูลที่จำเป็นสำหรับดาวน์โหลดและวิเคราะห์เพลง:</span>
+                          <button
+                            onClick={handleAutoInstallModules}
+                            disabled={isAutoInstalling}
+                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <span>⚡</span>
+                            <span>{isAutoInstalling ? 'กำลังติดตั้ง...' : 'กดติดตั้งอัตโนมัติ 1-Click'}</span>
+                          </button>
+                        </div>
                         <div className="grid grid-cols-3 gap-2">
                           {Object.entries(systemHealth.modules).map(([mod, ok]) => (
                             <div key={mod} className={`p-2 rounded-xl border flex items-center justify-between font-mono text-[11px] ${ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>

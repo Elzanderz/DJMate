@@ -179,6 +179,13 @@ async fn check_system_health() -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn install_missing_modules() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| run_bridge("install_missing_modules", json!({})))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn get_output_dir() -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(|| run_bridge("get_output_dir", json!({})))
         .await
@@ -752,7 +759,8 @@ pub fn run() {
             search_music_unified,
             search_local_folder,
             search_online_tracks,
-            check_system_health
+            check_system_health,
+            install_missing_modules
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

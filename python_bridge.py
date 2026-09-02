@@ -17,13 +17,13 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Auto-check and install critical dependencies if missing
-for mod, pkg in [('requests', 'requests'), ('yt_dlp', 'yt-dlp'), ('mutagen', 'mutagen'), ('urllib3', 'urllib3')]:
+for mod, pkg in [('requests', 'requests'), ('yt_dlp', 'yt-dlp'), ('mutagen', 'mutagen'), ('urllib3', 'urllib3'), ('PIL', 'pillow'), ('numpy', 'numpy'), ('imageio_ffmpeg', 'imageio-ffmpeg')]:
     try:
         __import__(mod)
     except ImportError:
         try:
             import subprocess
-            subprocess.run([sys.executable, '-m', 'pip', 'install', pkg, '--quiet'], check=False)
+            subprocess.run([sys.executable, '-m', 'pip', 'install', pkg, '--user', '--break-system-packages', '--quiet'], check=False)
         except Exception:
             pass
 
@@ -70,6 +70,18 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
             except Exception:
                 health['modules'][mod] = False
         return {'result': health}
+
+    elif cmd_name == 'install_missing_modules':
+        packages = ['pillow', 'numpy', 'imageio-ffmpeg', 'mutagen', 'yt-dlp', 'requests', 'urllib3']
+        results = {}
+        for pkg in packages:
+            try:
+                cmd = [sys.executable, '-m', 'pip', 'install', pkg, '--user', '--break-system-packages']
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                results[pkg] = True
+            except Exception:
+                results[pkg] = False
+        return {'result': {'success': True, 'installed': results}}
 
     elif cmd_name == 'get_output_dir':
         return {'result': output_dir}
