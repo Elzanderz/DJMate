@@ -8884,43 +8884,52 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   </button>
                 </div>
 
-                {systemHealth ? (
+                {isCheckingHealth ? (
+                  <div className="p-6 rounded-xl bg-[#0c0c0f] border border-white/5 text-center space-y-2">
+                    <div className="inline-block animate-spin text-lg">⚙️</div>
+                    <p className="text-zinc-400 text-xs">กำลังตรวจเช็กความพร้อมของ Python และโมดูลบนเครื่อง...</p>
+                  </div>
+                ) : (systemHealth && systemHealth.modules) ? (
                   <div className="space-y-3">
                     <div className="p-3 rounded-xl bg-[#0c0c0f] border border-[#242424] space-y-1.5 font-mono text-[11px]">
-                      <p><strong className="text-zinc-400">Python Version:</strong> <span className="text-[#1DB954]">{systemHealth.python_version || 'Detected'}</span></p>
-                      <p><strong className="text-zinc-400">OS Platform:</strong> <span className="text-white">{systemHealth.platform || 'Unknown'}</span></p>
+                      <p><strong className="text-zinc-400">Python Version:</strong> <span className="text-[#1DB954]">{systemHealth.python_version || '3.9+'}</span></p>
+                      <p><strong className="text-zinc-400">OS Platform:</strong> <span className="text-white">{systemHealth.platform === 'darwin' ? 'macOS (Darwin)' : systemHealth.platform === 'win32' ? 'Windows' : systemHealth.platform || 'macOS'}</span></p>
                       {systemHealth.executable && (
                         <p className="truncate"><strong className="text-zinc-400">Python Path:</strong> <span className="text-zinc-300">{systemHealth.executable}</span></p>
                       )}
                     </div>
 
-                    {systemHealth.modules && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-zinc-300 text-xs">โมดูลที่จำเป็นสำหรับดาวน์โหลดและวิเคราะห์เพลง:</span>
-                          <button
-                            onClick={handleAutoInstallModules}
-                            disabled={isAutoInstalling}
-                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                          >
-                            <span>⚡</span>
-                            <span>{isAutoInstalling ? 'กำลังติดตั้ง...' : 'กดติดตั้งอัตโนมัติ 1-Click'}</span>
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {Object.entries(systemHealth.modules).map(([mod, ok]) => (
-                            <div key={mod} className={`p-2 rounded-xl border flex items-center justify-between font-mono text-[11px] ${ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
-                              <span>{mod}</span>
-                              <span>{ok ? '✓ ติดตั้งแล้ว' : '✗ ไม่พบ'}</span>
-                            </div>
-                          ))}
-                        </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-zinc-300 text-xs">โมดูลที่จำเป็นสำหรับดาวน์โหลดและวิเคราะห์เพลง:</span>
+                        <button
+                          onClick={handleAutoInstallModules}
+                          disabled={isAutoInstalling}
+                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <span>⚡</span>
+                          <span>{isAutoInstalling ? 'กำลังติดตั้ง...' : 'กดติดตั้งอัตโนมัติ 1-Click'}</span>
+                        </button>
                       </div>
-                    )}
+                      <div className="grid grid-cols-3 gap-2">
+                        {Object.entries(systemHealth.modules).map(([mod, ok]) => (
+                          <div key={mod} className={`p-2 rounded-xl border flex items-center justify-between font-mono text-[11px] ${ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
+                            <span>{mod}</span>
+                            <span>{ok ? '✓ ติดตั้งแล้ว' : '✗ ไม่พบ'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-[#0c0c0f] text-center text-zinc-400">
-                    กดปุ่ม "ตรวจใหม่" เพื่อตรวจสอบสถานะของ Python บนเครื่อง
+                  <div className="p-4 rounded-xl bg-[#0c0c0f] text-center text-zinc-400 space-y-2">
+                    <p>กดปุ่ม "ตรวจใหม่" เพื่อตรวจสอบสถานะของ Python บนเครื่อง</p>
+                    <button
+                      onClick={handleFetchSystemHealth}
+                      className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      🔄 เริ่มตรวจสอบ
+                    </button>
                   </div>
                 )}
 
