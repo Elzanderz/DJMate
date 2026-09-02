@@ -456,6 +456,12 @@ export default function App() {
   const [availableDrives, setAvailableDrives] = useState<any[]>([]);
   const [selectedDrivePath, setSelectedDrivePath] = useState('');
   const [isExportingUsb, setIsExportingUsb] = useState(false);
+  const [usbExportProgress, setUsbExportProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    currentTrack: string;
+  } | null>(null);
 
   // Mixtape Set Export Modal
   const [showExportSetModal, setShowExportSetModal] = useState(false);
@@ -2448,23 +2454,93 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     }
 
     setIsExportingUsb(true);
+    setUsbExportProgress({
+      current: 0,
+      total: target.length,
+      percent: 0,
+      currentTrack: 'กำลังเตรียมโฟลเดอร์ปลายทาง...'
+    });
+
     try {
-      const res: any = await invokeBackend('export_to_dj_drive', {
-        tracks: target,
-        target_dir: selectedDrivePath.trim(),
-        structure_mode: structMode,
-        playlist_name: exportTitle
-      });
-      if (res && res.success) {
-        setShowUsbModal(false);
-        showToast(`⚡ Exported ${res.total_tracks || res.exported_count || target.length} tracks to ${selectedDrivePath}!`, 'success');
+      if (structMode === 'by_gig_crates' || target.length <= 25) {
+        setUsbExportProgress({
+          current: 1,
+          total: target.length,
+          percent: 50,
+          currentTrack: `กำลังจัดเตรียม DJ Gig Crates (${target.length} เพลง)...`
+        });
+        const res: any = await invokeBackend('export_to_dj_drive', {
+          tracks: target,
+          target_dir: selectedDrivePath.trim(),
+          structure_mode: structMode,
+          playlist_name: exportTitle
+        });
+        setUsbExportProgress({
+          current: target.length,
+          total: target.length,
+          percent: 100,
+          currentTrack: 'เสร็จสมบูรณ์!'
+        });
+        if (res && res.success) {
+          setShowUsbModal(false);
+          showToast(`⚡ Exported ${res.total_tracks || res.exported_count || target.length} tracks to ${selectedDrivePath}!`, 'success');
+        } else {
+          showToast('USB Export failed', 'error');
+        }
       } else {
-        showToast('USB Export failed', 'error');
+        // Chunked batch copying with live animated progress
+        const chunkSize = 25;
+        const total = target.length;
+        for (let i = 0; i < total; i += chunkSize) {
+          const chunk = target.slice(i, i + chunkSize);
+          const currentCount = Math.min(i + chunkSize, total);
+          const currentTrackName = chunk[0]?.title ? `${chunk[0].artist || ''} - ${chunk[0].title}` : `คัดลอกเพลงที่ ${i + 1}-${currentCount}`;
+
+          setUsbExportProgress({
+            current: currentCount,
+            total,
+            percent: Math.round((currentCount / total) * 92),
+            currentTrack: currentTrackName
+          });
+
+          await invokeBackend('export_to_dj_drive', {
+            tracks: chunk,
+            target_dir: selectedDrivePath.trim(),
+            structure_mode: structMode,
+            playlist_name: exportTitle
+          });
+        }
+
+        // Finalize Master Rekordbox XML and M3U8 with ALL tracks
+        setUsbExportProgress({
+          current: total,
+          total,
+          percent: 98,
+          currentTrack: 'กำลังสร้าง Master Rekordbox XML & 8 CDJ Hot Cues...'
+        });
+
+        const finalRes: any = await invokeBackend('export_to_dj_drive', {
+          tracks: target,
+          target_dir: selectedDrivePath.trim(),
+          structure_mode: structMode,
+          playlist_name: exportTitle
+        });
+
+        setUsbExportProgress({
+          current: total,
+          total,
+          percent: 100,
+          currentTrack: 'เสร็จสิ้น 100%!'
+        });
+
+        setShowUsbModal(false);
+        showToast(`⚡ Exported ${finalRes?.total_tracks || total} tracks to ${selectedDrivePath} พร้อม Rekordbox XML!`, 'success');
       }
-    } catch (e) {
+    } catch (e: any) {
       showToast('USB Export error: ' + e, 'error');
     } finally {
       setIsExportingUsb(false);
+      setUsbExportProgress(null);
     }
   };
 
@@ -5930,6 +6006,33 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Live Real-time Progress Bar */}
+              {isExportingUsb && usbExportProgress && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/50 via-teal-950/30 to-black/70 border border-emerald-500/50 space-y-2.5 shadow-2xl animate-fade-in">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-white flex items-center gap-2">
+                      <span className="animate-spin text-emerald-400 text-sm">↻</span>
+                      <span>กำลังส่งออกเพลงและจัดเตรียม Rekordbox XML...</span>
+                    </span>
+                    <span className="text-emerald-400 font-mono text-xs font-extrabold bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                      {usbExportProgress.current} / {usbExportProgress.total} ({usbExportProgress.percent}%)
+                    </span>
+                  </div>
+
+                  <div className="w-full h-3 rounded-full bg-black/80 overflow-hidden border border-white/10 p-0.5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-[#1DB954] transition-all duration-300 shadow-lg shadow-emerald-500/50"
+                      style={{ width: `${Math.max(4, usbExportProgress.percent)}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-zinc-300 font-mono truncate flex items-center gap-1.5">
+                    <span className="text-emerald-400">🎵</span>
+                    <span className="truncate">{usbExportProgress.currentTrack}</span>
+                  </p>
+                </div>
+              )}
 
               {/* Status info */}
               <div className="p-2.5 bg-[#101013] rounded-2xl border border-white/5 space-y-1 text-zinc-400 text-[11px]">
