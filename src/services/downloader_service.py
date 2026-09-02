@@ -198,6 +198,53 @@ class DownloaderService:
         return score
 
     @classmethod
+    def get_ffmpeg_path(cls) -> Optional[str]:
+        import shutil
+        import sys
+
+        # 1. System PATH
+        found = shutil.which('ffmpeg')
+        if found and os.path.exists(found):
+            return found
+
+        # 2. Check imageio_ffmpeg Python package
+        try:
+            import imageio_ffmpeg
+            p = imageio_ffmpeg.get_ffmpeg_exe()
+            if p and os.path.exists(p):
+                return p
+        except Exception:
+            pass
+
+        # 3. Common macOS Homebrew / MacPorts locations
+        mac_paths = [
+            '/opt/homebrew/bin/ffmpeg',
+            '/usr/local/bin/ffmpeg',
+            '/opt/local/bin/ffmpeg',
+            '/usr/bin/ffmpeg',
+            os.path.expanduser('~/bin/ffmpeg'),
+            os.path.expanduser('~/.local/bin/ffmpeg')
+        ]
+        for p in mac_paths:
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                return p
+
+        # 4. Common Windows locations
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        win_paths = [
+            os.path.join(project_root, 'ffmpeg.exe'),
+            os.path.join(project_root, 'bin', 'ffmpeg.exe'),
+            os.path.join(os.path.expanduser('~'), 'ffmpeg', 'bin', 'ffmpeg.exe'),
+            r'C:\ffmpeg\bin\ffmpeg.exe',
+            r'C:\ProgramData\chocolatey\bin\ffmpeg.exe'
+        ]
+        for p in win_paths:
+            if os.path.exists(p):
+                return p
+
+        return None
+
+    @classmethod
     def download_track(
         cls,
         track_info: Dict,
@@ -357,6 +404,13 @@ class DownloaderService:
                 'nocheckcertificate': True,
             }
 
+            ffmpeg_exe = cls.get_ffmpeg_path()
+            if ffmpeg_exe:
+                ydl_opts['ffmpeg_location'] = ffmpeg_exe
+                ffmpeg_dir = os.path.dirname(ffmpeg_exe)
+                if ffmpeg_dir and ffmpeg_dir not in os.environ.get('PATH', ''):
+                    os.environ['PATH'] = f"{ffmpeg_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+
             # 1. Direct Stream Download (e.g. YouTube video / playlist / soundcloud)
             direct_url = track_info.get('direct_url') or track_info.get('url')
             if not direct_url:
@@ -458,15 +512,16 @@ class DownloaderService:
 
             # Locate actual converted file
             actual_file = target_file
+            candidate_exts = ['.mp3', '.m4a', '.flac', '.wav', '.mp4', '.webm', '.opus', '.mkv']
             if not os.path.exists(actual_file):
-                for ext in ['.mp3', '.m4a', '.flac', '.wav']:
+                for ext in candidate_exts:
                     candidate = os.path.join(save_dir, f'{clean_base}{ext}')
                     if os.path.exists(candidate):
                         actual_file = candidate
                         break
 
             if not os.path.exists(actual_file):
-                for ext in ['.mp3', '.m4a', '.flac', '.wav']:
+                for ext in candidate_exts:
                     candidate = os.path.join(output_dir, f'{clean_base}{ext}')
                     if os.path.exists(candidate):
                         actual_file = candidate
@@ -478,7 +533,7 @@ class DownloaderService:
                     for search_fld in [save_dir, output_dir]:
                         if os.path.exists(search_fld):
                             for f in os.listdir(search_fld):
-                                if f.lower().endswith(('.mp3', '.m4a', '.flac', '.wav')):
+                                if f.lower().endswith(('.mp3', '.m4a', '.flac', '.wav', '.mp4', '.webm', '.opus', '.mkv')):
                                     full_p = os.path.join(search_fld, f)
                                     if os.path.getmtime(full_p) >= start_time:
                                         actual_file = full_p
@@ -490,6 +545,33 @@ class DownloaderService:
 
         if not actual_file or not os.path.exists(actual_file):
             raise Exception(f'Could not download audio stream. (Last error: {last_error})')
+
+        # Transcode MP4 / WebM / Opus to MP3 / requested codec if needed
+        desired_ext = f".{codec}"
+        curr_ext = os.path.splitext(actual_file)[1].lower()
+        if curr_ext in ('.mp4', '.webm', '.opus', '.mkv') or (curr_ext != desired_ext and audio_format.lower() == 'mp3'):
+            ffmpeg_exe = cls.get_ffmpeg_path()
+            if ffmpeg_exe:
+                converted_target = os.path.splitext(actual_file)[0] + desired_ext
+                if converted_target != actual_file:
+                    import subprocess
+                    try:
+                        cmd = [
+                            ffmpeg_exe, '-y',
+                            '-i', actual_file,
+                            '-vn',
+                            '-b:a', f"{audio_quality or '320'}k",
+                            converted_target
+                        ]
+                        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                        if os.path.exists(converted_target) and os.path.getsize(converted_target) > 1000:
+                            try:
+                                os.remove(actual_file)
+                            except Exception:
+                                pass
+                            actual_file = converted_target
+                    except Exception as conv_err:
+                        print(f"[DownloaderService] Transcode fallback error: {conv_err}")
 
         try:
             if progress_callback:

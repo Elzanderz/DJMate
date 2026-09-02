@@ -430,6 +430,31 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         ok = HistoryService.delete_track(filepath, delete_file=delete_file, track_id=track_id)
         return {'result': ok}
 
+    elif cmd_name == 'convert_mp4_to_mp3':
+        from src.services.downloader_service import DownloaderService
+        from src.services.history_service import HistoryService
+        target_dir = payload.get('target_dir') or output_dir
+        ffmpeg_exe = DownloaderService.get_ffmpeg_path()
+        converted_count = 0
+        if ffmpeg_exe and os.path.exists(target_dir):
+            import subprocess
+            for root, _, files in os.walk(target_dir):
+                for f in files:
+                    if f.lower().endswith(('.mp4', '.webm', '.opus', '.mkv')):
+                        src_p = os.path.join(root, f)
+                        base_p = os.path.splitext(src_p)[0]
+                        dst_p = f"{base_p}.mp3"
+                        try:
+                            cmd = [ffmpeg_exe, '-y', '-i', src_p, '-vn', '-b:a', '320k', dst_p]
+                            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                            if os.path.exists(dst_p) and os.path.getsize(dst_p) > 1000:
+                                os.remove(src_p)
+                                converted_count += 1
+                        except Exception:
+                            pass
+            HistoryService.sync_downloads_folder(target_dir)
+        return {'result': {'success': True, 'converted_count': converted_count}}
+
     elif cmd_name == 'export_rekordbox':
         tracks = payload.get('tracks', [])
         file_path = os.path.join(output_dir, 'rekordbox_spotify_dj_set.xml')

@@ -8908,10 +8908,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       <div className="flex-1 min-w-0">
                         <p className="mb-1">คัดลอกคำสั่งนี้ไปวางใน Terminal แล้วกด Enter (ใช้เวลาประมาณ 10-15 วินาที):</p>
                         <div className="flex items-center gap-2 bg-black/80 p-2 rounded-xl border border-white/10 font-mono text-[11px] text-emerald-400">
-                          <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy</span>
+                          <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg</span>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy');
+                              navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg');
                               showToast('คัดลอกคำสั่ง Terminal เรียบร้อยแล้ว!', 'success');
                             }}
                             className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[10px] transition shrink-0 cursor-pointer"
@@ -8931,10 +8931,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   <details className="pt-1 text-[10px] text-zinc-400">
                     <summary className="hover:text-zinc-200 transition cursor-pointer select-none">💡 หาก Terminal ขึ้นเตือนเรื่อง externally-managed-environment</summary>
                     <div className="mt-1.5 flex items-center gap-2 bg-black/80 p-2 rounded-xl border border-white/5 font-mono text-emerald-400">
-                      <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy --break-system-packages</span>
+                      <span className="flex-1 truncate">pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg --break-system-packages</span>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy --break-system-packages');
+                          navigator.clipboard.writeText('pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg --break-system-packages');
                           showToast('คัดลอกคำสั่งเรียบร้อยแล้ว!', 'success');
                         }}
                         className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[9px] transition shrink-0"

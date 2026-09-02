@@ -1,4 +1,4 @@
-﻿# 🎧 DJmate - คู่มือการติดตั้งและการใช้งานครั้งแรก (First-Time Setup Guide)
+# 🎧 DJmate - คู่มือการติดตั้งและการใช้งานครั้งแรก (First-Time Setup Guide)
 
 ยินดีต้อนรับสู่ **DJmate - Pro DJ Harmonic Suite**! แอปพลิเคชันสำหรับดาวน์โหลด วิเคราะห์ Harmonic Key (Camelot Wheel), BPM, ความดังเสียง (Auto-Gain Normalization) และจัดเตรียมคลังเพลงสำหรับ Rekordbox / USB
 
@@ -28,9 +28,10 @@
 1. เปิด **Terminal** บน Mac
 2. วางคำสั่งนี้แล้วกด **Enter**:
    ```bash
-   pip3 install requests yt-dlp mutagen urllib3 pillow numpy
+   pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg
    ```
-   *(💡 หาก Mac แจ้งเตือนเรื่อง externally-managed ให้ใช้คำสั่งนี้แทน: `pip3 install requests yt-dlp mutagen urllib3 pillow numpy --break-system-packages`)*
+   *(💡 หรือติดตั้ง ffmpeg ด้วย Homebrew: `brew install ffmpeg`)*
+   *(💡 หาก Mac แจ้งเตือนเรื่อง externally-managed ให้ใส่ flag เพิ่ม: `pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg --break-system-packages`)*
 
 ---
 
