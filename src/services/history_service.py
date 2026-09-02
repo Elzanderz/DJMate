@@ -238,10 +238,9 @@ class HistoryService:
         physical_files = {}  # abs_path -> { filename, rel_folder, playlist_name }
         physical_by_filename = {}  # filename.lower() -> list of abs_paths
         
-        for root, _, files in os.walk(folder):
-            # Skip export and temporary storage folders
-            if any(skip in root for skip in ('DJ_Gig_Storage', 'DJ_USB_Export', 'Smart_Mixtape_DJ_Set', 'scratch')):
-                continue
+        for root, dirs, files in os.walk(folder):
+            # Exclude hidden or build/cache system folders
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', '__pycache__', '.git', 'scratch')]
             for file in files:
                 if file.lower().endswith(('.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg')) and not file.startswith('.'):
                     abs_p = os.path.abspath(os.path.join(root, file))

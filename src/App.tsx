@@ -311,13 +311,26 @@ export default function App() {
       return;
     }
     try {
-      const saved = await invokeBackend('set_output_dir', { path: pathToSave });
+      const saved: any = await invokeBackend('set_output_dir', { path: pathToSave });
       const raw = typeof saved === 'string' ? saved : (saved?.result || saved?.path || pathToSave);
       const cleaned = cleanDisplayPath(raw);
       setOutputDir(cleaned);
       setSettingsPathInput(cleaned);
       showToast(`บันทึกโฟลเดอร์เพลงเป็น: ${cleaned}`, 'success');
-      refreshLibrary();
+
+      // Immediately run library sync on the newly configured folder
+      try {
+        const synced: any = await invokeBackend('sync_library');
+        const list = Array.isArray(synced) ? synced : (Array.isArray(synced?.result) ? synced.result : null);
+        if (Array.isArray(list)) {
+          setLibraryTracks(list);
+          showToast(`✓ ซิงค์เพลงในคลังสำเร็จ พบทั้งหมด ${list.length} เพลง`, 'success');
+        } else {
+          await refreshLibrary();
+        }
+      } catch (err) {
+        await refreshLibrary();
+      }
     } catch (e: any) {
       showToast('เกิดข้อผิดพลาดในการบันทึกโฟลเดอร์: ' + e, 'error');
     }
