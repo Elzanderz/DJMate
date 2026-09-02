@@ -2538,19 +2538,39 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       {/* ================= LEFT SIDEBAR (Workly / macOS Style) ================= */}
       <aside className="w-64 bg-[#141417] border-r border-white/5 flex flex-col p-4 flex-shrink-0 z-20">
         
-        {/* macOS Traffic Lights + Brand Header */}
-        <div className="flex items-center justify-between pb-5 pt-1 px-1">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 mr-1">
-              <span className="w-3 h-3 rounded-full bg-[#ff5f56] inline-block"></span>
-              <span className="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block"></span>
-              <span className="w-3 h-3 rounded-full bg-[#27c93f] inline-block"></span>
+        {/* macOS Traffic Lights + DJmate Brand Header */}
+        <div className="flex items-center justify-between pb-3.5 pt-1 px-1 border-b border-white/5 mb-3">
+          <div className="flex items-center gap-2.5">
+            {/* Cool Neon DJmate Platter Logo */}
+            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-[1.5px] shadow-[0_0_15px_#8b5cf660] group cursor-pointer transition hover:scale-105 active:scale-95">
+              <div className="w-full h-full bg-[#121216] rounded-[10px] flex items-center justify-center relative overflow-hidden">
+                {/* Vinyl Grooves */}
+                <div className="absolute inset-1 rounded-full border border-white/10" />
+                <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 flex items-center justify-center shadow-sm">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#121216]" />
+                </div>
+                {/* Neon Live Pulse Dot */}
+                <span className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_#34d399] animate-pulse" />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm tracking-tight text-white">DJ Studio</span>
+
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-base tracking-tight text-white flex items-center">
+                  <span>DJ</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 font-extrabold">mate</span>
+                </span>
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 border border-indigo-500/30 shadow-sm">
+                  PRO
+                </span>
+              </div>
+              <span className="text-[9px] text-zinc-500 font-medium tracking-wide">
+                Harmonic DJ Suite
+              </span>
             </div>
           </div>
-          <button onClick={handleOpenFolder} title="Open Output Folder" className="text-zinc-500 hover:text-white p-1 text-xs">
+
+          <button onClick={handleOpenFolder} title="Open Output Folder" className="text-zinc-500 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition text-xs">
             ↗
           </button>
         </div>

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Spotify DJ Converter",
+  "productName": "DJmate",
   "version": "1.0.0",
-  "identifier": "com.spotify.djconverter",
+  "identifier": "com.djmate.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Spotify DJ Converter & Harmonic Suite",
+        "title": "DJmate - Pro DJ Harmonic Suite",
         "width": 1200,
         "height": 800,
         "minWidth": 980,

@@ -1,5 +1,6 @@
 {
-  "name": "spotify-dj-converter",
+  "name": "djmate",
+  "productName": "DJmate",
   "private": true,
   "version": "1.0.0",
   "type": "module",

@@ -1,12 +1,12 @@
 [package]
-name = "spotify-dj-converter"
+name = "djmate"
 version = "1.0.0"
-description = "Spotify Music & DJ Converter - Tauri v2 Edition"
-authors = ["Spotify DJ Suite"]
+description = "DJmate - Pro DJ Harmonic Suite"
+authors = ["DJmate"]
 edition = "2021"
 
 [lib]
-name = "spotify_dj_converter_lib"
+name = "djmate_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
