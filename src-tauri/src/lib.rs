@@ -447,6 +447,24 @@ async fn redownload_studio_master(filepath: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn get_activities(limit: Option<i64>) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_bridge("get_activities", json!({ "limit": limit.unwrap_or(200) }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn clear_activities() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_bridge("clear_activities", json!({}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn find_mashup_matches(tracks: Option<Value>, min_score: Option<i64>, limit: Option<i64>) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         run_bridge("find_mashup_matches", json!({
@@ -550,6 +568,8 @@ pub fn run() {
             scan_duplicates,
             clean_duplicates_batch,
             redownload_studio_master,
+            get_activities,
+            clear_activities,
             find_mashup_matches,
             export_rekordbox,
             export_m3u8,

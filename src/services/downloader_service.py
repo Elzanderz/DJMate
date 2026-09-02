@@ -526,10 +526,28 @@ class DownloaderService:
 
             TaggerService.apply_tags(actual_file, track_info)
 
-            # 5. Save to local History Database
+            # 5. Save to local History Database & Activity Log
             try:
                 from .history_service import HistoryService
                 HistoryService.save_track(track_info)
+            except Exception:
+                pass
+
+            try:
+                from .activity_service import ActivityService
+                ActivityService.log_activity(
+                    category='download',
+                    title=f"{artist} - {title}" if artist else title,
+                    description=f"ดาวน์โหลดสำเร็จ • {audio_format.upper()} {audio_quality}kbps • {track_info.get('camelot', '')} {track_info.get('bpm', '')} BPM",
+                    details={
+                        'filepath': actual_file,
+                        'artist': artist,
+                        'title': title,
+                        'camelot': track_info.get('camelot', ''),
+                        'bpm': track_info.get('bpm', ''),
+                        'format': audio_format
+                    }
+                )
             except Exception:
                 pass
 

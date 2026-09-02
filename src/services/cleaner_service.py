@@ -157,10 +157,22 @@ class CleanerService:
         # Batch delete from library database
         HistoryService.batch_delete_tracks(filepaths_to_delete, delete_files=False)
 
+        freed_mb = round(freed_bytes / (1024 * 1024), 2)
+        try:
+            from .activity_service import ActivityService
+            ActivityService.log_activity(
+                category='clean_dupes',
+                title=f"ล้างไฟล์เพลงซ้ำ {deleted_count} ไฟล์",
+                description=f"เพิ่มพื้นที่ว่างในเครื่อง {freed_mb} MB สำเร็จ",
+                details={'deleted_count': deleted_count, 'freed_mb': freed_mb}
+            )
+        except Exception:
+            pass
+
         return {
             'success': True,
             'deleted_count': deleted_count,
-            'freed_mb': round(freed_bytes / (1024 * 1024), 2)
+            'freed_mb': freed_mb
         }
 
     @classmethod
@@ -222,5 +234,16 @@ class CleanerService:
 
         if new_path and os.path.exists(new_path):
             HistoryService.sync_downloads_folder(output_dir)
+            try:
+                from .activity_service import ActivityService
+                song_name = f"{target_track.get('artist', '')} - {target_track.get('title', '')}".strip(' -')
+                ActivityService.log_activity(
+                    category='studio_upgrade',
+                    title=f"อัปเกรดเป็น Studio Master: {song_name}",
+                    description="ดาวน์โหลดเวอร์ชัน Official Studio Release (320kbps) แทนที่ไฟล์ MV เดิมเรียบร้อย",
+                    details={'filepath': new_path, 'artist': target_track.get('artist'), 'title': target_track.get('title')}
+                )
+            except Exception:
+                pass
             return {'success': True, 'new_filepath': new_path}
         return {'success': False, 'error': 'Failed to download studio master'}

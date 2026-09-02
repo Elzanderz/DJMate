@@ -251,6 +251,26 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         res = CleanerService.redownload_studio_master(filepath)
         return {'result': res}
 
+    elif cmd_name == 'get_activities':
+        from src.services.activity_service import ActivityService
+        limit = payload.get('limit', 200)
+        res = ActivityService.get_activities(limit=limit)
+        return {'result': res}
+
+    elif cmd_name == 'log_activity':
+        from src.services.activity_service import ActivityService
+        cat = payload.get('category', 'general')
+        title = payload.get('title', '')
+        desc = payload.get('description', '')
+        details = payload.get('details', {})
+        res = ActivityService.log_activity(category=cat, title=title, description=desc, details=details)
+        return {'result': res}
+
+    elif cmd_name == 'clear_activities':
+        from src.services.activity_service import ActivityService
+        res = ActivityService.clear_activities()
+        return {'result': res}
+
     elif cmd_name == 'find_mashup_matches':
         from src.services.mashup_service import MashupService
         from src.services.history_service import HistoryService

@@ -237,8 +237,14 @@ const getHarmonicTransition = (fromTrack: Track, toTrack: Track): TransitionInfo
 };
 
 export default function App() {
-  // Navigation Tabs: 'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups'
-  const [activeTab, setActiveTab] = useState<'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups'>('queue');
+  // Navigation Tabs: 'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups' | 'activity'
+  const [activeTab, setActiveTab] = useState<'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups' | 'activity'>('queue');
+
+  // Activity History State
+  const [activities, setActivities] = useState<any[]>([]);
+  const [isFetchingActivities, setIsFetchingActivities] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<string>('all');
+  const [activitySearch, setActivitySearch] = useState<string>('');
 
   // AI DJ Gig Crates & Storage State
   const [gigCrates, setGigCrates] = useState<any[]>([]);
@@ -555,6 +561,30 @@ export default function App() {
       showToast('เกิดข้อผิดพลาด: ' + e, 'error');
     } finally {
       setIsRedownloadingStudio(null);
+    }
+  };
+
+  const fetchActivities = async () => {
+    setIsFetchingActivities(true);
+    try {
+      const res: any = await invokeBackend('get_activities', { limit: 200 });
+      if (Array.isArray(res)) {
+        setActivities(res);
+      }
+    } catch (e) {
+      console.error('Error fetching activities:', e);
+    } finally {
+      setIsFetchingActivities(false);
+    }
+  };
+
+  const handleClearActivities = async () => {
+    try {
+      await invokeBackend('clear_activities');
+      setActivities([]);
+      showToast('🧹 ล้างประวัติกิจกรรมเรียบร้อยแล้ว', 'success');
+    } catch (e) {
+      showToast('เกิดข้อผิดพลาดในการล้างประวัติ: ' + e, 'error');
     }
   };
 
@@ -2788,6 +2818,27 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             )}
           </div>
 
+          {/* Tab 6: Activity & History Logs */}
+          <div
+            onClick={() => {
+              setActiveTab('activity');
+              fetchActivities();
+            }}
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+              activeTab === 'activity'
+                ? 'bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-transparent text-white font-bold border border-teal-500/30'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-teal-400 text-sm">⏱️</span>
+              <span>Activity History</span>
+            </div>
+            {activeTab === 'activity' && (
+              <span className="w-1.5 h-4 rounded-full bg-teal-500 shadow-[0_0_10px_#14b8a6]"></span>
+            )}
+          </div>
+
           {/* Camelot Wheel */}
           <div
             onClick={() => setShowCamelotModal(true)}
@@ -2885,6 +2936,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 ? 'AI DJ Gig Crates & Smart Storage'
                 : activeTab === 'mashups'
                 ? 'AI DJ Mashup Matcher & Synergy Engine'
+                : activeTab === 'activity'
+                ? 'Activity & History Logs'
                 : 'Smart Mixtape Sequencer'}
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
@@ -2898,6 +2951,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 ? 'Auto-classify and structure library into professional Gig Profiles & Rekordbox Storage folders'
                 : activeTab === 'mashups'
                 ? 'Discovers 100% harmonic compatible pairs, layers vocal hooks on heavy drops, and calculates tempo sync'
+                : activeTab === 'activity'
+                ? 'Real-time audit log of downloads, Studio Master upgrades, duplicate cleanups, and export events'
                 : 'Automatically sequence tracks using harmonic key transitions and energy curve'}
             </p>
           </div>
@@ -4753,6 +4808,317 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Tab 6: Activity & History Logs View */}
+          {activeTab === 'activity' && (
+            <div className="space-y-4">
+              {/* Top Banner Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-[#121215] rounded-2xl border border-white/5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg">
+                    📥
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold">ดาวน์โหลดสำเร็จ</p>
+                    <p className="text-lg font-black text-white font-mono">
+                      {activities.filter(a => a.category === 'download').length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#121215] rounded-2xl border border-white/5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg">
+                    ⚡
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold">Studio Master</p>
+                    <p className="text-lg font-black text-amber-400 font-mono">
+                      {activities.filter(a => a.category === 'studio_upgrade').length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#121215] rounded-2xl border border-white/5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 text-lg">
+                    🧹
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold">ล้างไฟล์ซ้ำ</p>
+                    <p className="text-lg font-black text-rose-400 font-mono">
+                      {activities.filter(a => a.category === 'clean_dupes').length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#121215] rounded-2xl border border-white/5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 text-lg">
+                    💾
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold">DJ Sets / Exports</p>
+                    <p className="text-lg font-black text-sky-400 font-mono">
+                      {activities.filter(a => a.category?.startsWith('export') || a.category === 'mixtape').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Controls & Filter Bar */}
+              <div className="p-3.5 bg-[#121215] rounded-2xl border border-white/5 flex flex-wrap items-center justify-between gap-3">
+                {/* Category Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                  <button
+                    onClick={() => setActivityFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl transition ${
+                      activityFilter === 'all'
+                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    ทั้งหมด ({activities.length})
+                  </button>
+
+                  <button
+                    onClick={() => setActivityFilter('download')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      activityFilter === 'download'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>📥 ดาวน์โหลด</span>
+                    <span className="font-mono text-[10px] opacity-75">
+                      ({activities.filter(a => a.category === 'download').length})
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActivityFilter('studio_upgrade')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      activityFilter === 'studio_upgrade'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>⚡ Studio Upgrade</span>
+                    <span className="font-mono text-[10px] opacity-75">
+                      ({activities.filter(a => a.category === 'studio_upgrade').length})
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActivityFilter('clean_dupes')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      activityFilter === 'clean_dupes'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>🧹 ล้างไฟล์ซ้ำ</span>
+                    <span className="font-mono text-[10px] opacity-75">
+                      ({activities.filter(a => a.category === 'clean_dupes').length})
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActivityFilter('exports')}
+                    className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                      activityFilter === 'exports'
+                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>💾 Exports & Sets</span>
+                    <span className="font-mono text-[10px] opacity-75">
+                      ({activities.filter(a => a.category?.startsWith('export') || a.category === 'mixtape').length})
+                    </span>
+                  </button>
+                </div>
+
+                {/* Search & Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <input
+                    type="text"
+                    value={activitySearch}
+                    onChange={(e) => setActivitySearch(e.target.value)}
+                    placeholder="🔍 ค้นหาในประวัติกิจกรรม..."
+                    className="px-3 py-1.5 rounded-xl bg-[#18181c] border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-teal-500/50 w-48"
+                  />
+
+                  <button
+                    onClick={fetchActivities}
+                    className="p-1.5 rounded-xl bg-[#18181c] hover:bg-white/10 text-zinc-300 hover:text-white transition text-xs flex items-center justify-center w-8 h-8"
+                    title="รีเฟรชประวัติ"
+                  >
+                    {isFetchingActivities ? <span className="animate-spin">↻</span> : <span>↻</span>}
+                  </button>
+
+                  {activities.length > 0 && (
+                    <button
+                      onClick={handleClearActivities}
+                      className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs font-bold transition flex items-center gap-1"
+                      title="ล้างประวัติกิจกรรมทั้งหมด"
+                    >
+                      <span>🧹 ล้างประวัติ</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Activity Log List */}
+              <div className="space-y-2">
+                {(() => {
+                  const filtered = activities.filter((act) => {
+                    if (activityFilter !== 'all') {
+                      if (activityFilter === 'exports') {
+                        if (!act.category?.startsWith('export') && act.category !== 'mixtape') return false;
+                      } else if (act.category !== activityFilter) {
+                        return false;
+                      }
+                    }
+                    if (activitySearch.trim()) {
+                      const q = activitySearch.toLowerCase();
+                      const matchTitle = (act.title || '').toLowerCase().includes(q);
+                      const matchDesc = (act.description || '').toLowerCase().includes(q);
+                      const matchCat = (act.category || '').toLowerCase().includes(q);
+                      const matchDate = (act.datetime_str || '').toLowerCase().includes(q);
+                      if (!matchTitle && !matchDesc && !matchCat && !matchDate) return false;
+                    }
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-16 text-center text-zinc-500 bg-[#121215] rounded-3xl border border-white/5 space-y-3">
+                        <span className="text-4xl">⏱️</span>
+                        <h3 className="text-sm font-bold text-zinc-300">ยังไม่มีประวัติกิจกรรมในหมวดนี้</h3>
+                        <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                          เมื่อคุณดาวน์โหลดเพลง, อัปเกรดเป็น Studio Master, หรือจัดการคลังเพลง รายการประวัติจะถูกบันทึกที่นี่โดยอัตโนมัติ
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((act, idx) => {
+                    const isDownload = act.category === 'download';
+                    const isStudio = act.category === 'studio_upgrade';
+                    const isClean = act.category === 'clean_dupes';
+                    const isExport = act.category?.startsWith('export') || act.category === 'mixtape';
+
+                    const icon = isDownload ? '📥' : isStudio ? '⚡' : isClean ? '🧹' : isExport ? '💾' : '🎵';
+                    const badgeBg = isDownload
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : isStudio
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : isClean
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : isExport
+                      ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                      : 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+
+                    const categoryLabel = isDownload
+                      ? 'DOWNLOAD'
+                      : isStudio
+                      ? 'STUDIO MASTER'
+                      : isClean
+                      ? 'CLEANER'
+                      : isExport
+                      ? 'EXPORT'
+                      : 'PLAYBACK';
+
+                    const filepath = act.details?.filepath;
+
+                    return (
+                      <div
+                        key={act.id || idx}
+                        className="p-3.5 bg-[#121215] hover:bg-[#15151a] rounded-2xl border border-white/5 transition flex items-center justify-between gap-4 group"
+                      >
+                        {/* Left: Icon & Details */}
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border flex-shrink-0 shadow-sm ${badgeBg}`}>
+                            {icon}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${badgeBg}`}>
+                                {categoryLabel}
+                              </span>
+                              <h4 className="text-xs font-bold text-white truncate">{act.title}</h4>
+                            </div>
+
+                            <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+                              {act.description}
+                            </p>
+
+                            {/* Metadata Tags */}
+                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-500 font-mono flex-wrap">
+                              <span>🕒 {act.datetime_str}</span>
+                              {act.details?.camelot && (
+                                <span className="px-1.5 py-0.2 rounded bg-white/5 text-zinc-300">
+                                  🎹 {act.details.camelot}
+                                </span>
+                              )}
+                              {act.details?.bpm && (
+                                <span className="px-1.5 py-0.2 rounded bg-white/5 text-zinc-300">
+                                  🥁 {Math.round(act.details.bpm)} BPM
+                                </span>
+                              )}
+                              {act.details?.format && (
+                                <span className="px-1.5 py-0.2 rounded bg-white/5 text-zinc-300 uppercase">
+                                  {act.details.format}
+                                </span>
+                              )}
+                              {act.details?.freed_mb && (
+                                <span className="px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-300">
+                                  +{act.details.freed_mb} MB Free
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Actions */}
+                        {filepath && (
+                          <div className="flex items-center gap-1.5 flex-shrink-0 opacity-80 group-hover:opacity-100 transition">
+                            <button
+                              onClick={() => {
+                                const t = libraryTracks.find(lt => lt.filepath === filepath) || {
+                                  title: act.details?.title || act.title,
+                                  artist: act.details?.artist || '',
+                                  filepath: filepath
+                                };
+                                playTrack(t);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                              title="เปิดเล่นเพลง"
+                            >
+                              <span>▶️</span>
+                              <span>เล่น</span>
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await invokeBackend('open_folder', { path: filepath });
+                                } catch (e) {
+                                  showToast('Error opening folder: ' + e, 'error');
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white text-xs transition cursor-pointer"
+                              title="เปิดตำแหน่งไฟล์ในเครื่อง"
+                            >
+                              📁
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
