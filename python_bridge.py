@@ -16,17 +16,6 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Auto-check and install critical dependencies if missing
-for mod, pkg in [('requests', 'requests'), ('yt_dlp', 'yt-dlp'), ('mutagen', 'mutagen'), ('urllib3', 'urllib3'), ('PIL', 'pillow'), ('numpy', 'numpy'), ('imageio_ffmpeg', 'imageio-ffmpeg')]:
-    try:
-        __import__(mod)
-    except ImportError:
-        try:
-            import subprocess
-            subprocess.run([sys.executable, '-m', 'pip', 'install', pkg, '--user', '--break-system-packages', '--quiet'], check=False)
-        except Exception:
-            pass
-
 from src.services.spotify_service import SpotifyService
 from src.services.dj_analyzer_service import DJAnalyzerService
 from src.services.rekordbox_service import RekordboxService
