@@ -57,6 +57,15 @@ class DownloaderService:
             candidates.append(f"{artist} - {title} Lyrics")
             candidates.append(f"{artist} - {title} Lyric Video")
             candidates.append(f"{artist} - {title}")
+
+            # Priority 1.5: If collaborating artists (e.g. "2Ectasy, jeffy, Kakagoesbackhome"), also add primary artist queries
+            if (',' in artist or ' feat' in artist.lower() or ' ft.' in artist.lower() or ' x ' in artist.lower() or ' & ' in artist.lower()):
+                primary_artist = re.split(r'[,&]|\bfeat\.?|\bft\.?|\bx\b', artist, flags=re.I)[0].strip()
+                if primary_artist and len(primary_artist) > 1 and primary_artist.lower() != artist.lower():
+                    candidates.append(f"{primary_artist} {title} Topic")
+                    candidates.append(f"{primary_artist} - {title} Official Audio")
+                    candidates.append(f"{primary_artist} - {title} Lyrics")
+                    candidates.append(f"{primary_artist} - {title}")
         elif clean_core:
             candidates.append(f"{clean_core} Topic")
             candidates.append(f"{clean_core} Official Audio")
