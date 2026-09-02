@@ -167,7 +167,9 @@ class CleanerService:
 
         tracks = HistoryService.get_all()
         target_track = next((t for t in tracks if t.get('filepath') == filepath), None)
-        if not target_track:
+        if target_track:
+            target_track = dict(target_track)
+        else:
             filename = os.path.basename(filepath)
             base = os.path.splitext(filename)[0]
             parts = base.split(' - ', 1)
@@ -176,14 +178,33 @@ class CleanerService:
             else:
                 target_track = {'title': base, 'artist': '', 'filepath': filepath}
 
+        # Clean title of MV junk (e.g. "How Can I (Official Music Video)" -> "How Can I")
+        clean_title = re.sub(r'[\(\[\{].*?(?:music video|mv|official video|short film|drama|live|m/v).*?[\)\]\}]', '', target_track.get('title', ''), flags=re.I).strip()
+        if clean_title:
+            target_track['title'] = clean_title
+
+        # Clean artist of junk brackets
+        clean_artist = re.sub(r'[\(\[\{].*?[\)\]\}]', '', target_track.get('artist', '')).strip()
+        if clean_artist:
+            target_track['artist'] = clean_artist
+
+        # Force search for new studio audio stream by removing old direct URLs
+        target_track.pop('direct_url', None)
+        target_track.pop('url', None)
+        if str(target_track.get('id', '')).startswith('yt_'):
+            target_track.pop('id', None)
+
+        target_track['force_redownload'] = True
+        target_track['search_query'] = f"{target_track.get('artist', '')} {target_track.get('title', '')} Topic".strip()
+
         output_dir = os.path.dirname(filepath) if os.path.exists(filepath) else SettingsService.get_output_dir()
 
-        # If old file exists, remove it first to force re-download of clean studio version
+        # If old file exists, remove it before downloading clean replacement
         if filepath and os.path.exists(filepath):
             try:
                 os.remove(filepath)
-            except Exception:
-                pass
+            except Exception as del_err:
+                print(f"[CleanerService] Note removing old file: {del_err}")
 
         new_path = DownloaderService.download_track(
             target_track,

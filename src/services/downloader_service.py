@@ -229,32 +229,34 @@ class DownloaderService:
         clean_base = cls.sanitize_filename(base_name)
         target_file = os.path.join(save_dir, f'{clean_base}.{audio_format}')
 
-        # 0. Smart Duplicate Check: Reuse already existing local file if available
+        # 0. Smart Duplicate Check: Reuse already existing local file if available (unless force_redownload is True)
+        force_redownload = track_info.get('force_redownload', False)
         existing_local_file = None
-        if os.path.exists(target_file) and os.path.getsize(target_file) > 100000:
-            existing_local_file = target_file
-        else:
-            for ext in ['.mp3', '.m4a', '.flac', '.wav']:
-                cand = os.path.join(save_dir, f'{clean_base}{ext}')
-                if os.path.exists(cand) and os.path.getsize(cand) > 100000:
-                    existing_local_file = cand
-                    break
+        if not force_redownload:
+            if os.path.exists(target_file) and os.path.getsize(target_file) > 100000:
+                existing_local_file = target_file
+            else:
+                for ext in ['.mp3', '.m4a', '.flac', '.wav']:
+                    cand = os.path.join(save_dir, f'{clean_base}{ext}')
+                    if os.path.exists(cand) and os.path.getsize(cand) > 100000:
+                        existing_local_file = cand
+                        break
 
-        if not existing_local_file:
-            from .history_service import HistoryService
-            matched = HistoryService.find_existing_track(title, artist)
-            if matched and matched.get('filepath') and os.path.exists(matched.get('filepath')):
-                src_p = matched.get('filepath')
-                if os.path.getsize(src_p) > 100000:
-                    import shutil
-                    try:
-                        ext = os.path.splitext(src_p)[1]
-                        dest_p = os.path.join(save_dir, f'{clean_base}{ext}')
-                        if os.path.abspath(src_p) != os.path.abspath(dest_p):
-                            shutil.copy2(src_p, dest_p)
-                        existing_local_file = dest_p
-                    except Exception:
-                        existing_local_file = src_p
+            if not existing_local_file:
+                from .history_service import HistoryService
+                matched = HistoryService.find_existing_track(title, artist)
+                if matched and matched.get('filepath') and os.path.exists(matched.get('filepath')):
+                    src_p = matched.get('filepath')
+                    if os.path.getsize(src_p) > 100000:
+                        import shutil
+                        try:
+                            ext = os.path.splitext(src_p)[1]
+                            dest_p = os.path.join(save_dir, f'{clean_base}{ext}')
+                            if os.path.abspath(src_p) != os.path.abspath(dest_p):
+                                shutil.copy2(src_p, dest_p)
+                            existing_local_file = dest_p
+                        except Exception:
+                            existing_local_file = src_p
 
         actual_file = existing_local_file
 
