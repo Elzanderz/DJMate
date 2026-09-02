@@ -297,37 +297,58 @@ fn find_project_root() -> PathBuf {
 #[allow(non_snake_case)]
 fn open_folder(path: Option<String>, playlist_name: Option<String>, playlistName: Option<String>) -> Result<bool, String> {
     let project_root = find_project_root();
-    let downloads_root = project_root.join("downloads");
+    let default_downloads = project_root.join("downloads");
+
+    // 1. Fetch user's active configured output directory from settings
+    let active_output_dir = match run_bridge("get_output_dir", serde_json::json!({})) {
+        Ok(Value::String(s)) => {
+            let mut p = s.trim().to_string();
+            if p.starts_with(r"\\?\") {
+                p = p[4..].to_string();
+            }
+            if !p.is_empty() {
+                PathBuf::from(p)
+            } else {
+                default_downloads
+            }
+        }
+        _ => default_downloads,
+    };
+
     let raw_p = path.unwrap_or_default().trim().to_string();
     let p_name = playlist_name.or(playlistName).unwrap_or_default().trim().to_string();
 
     let mut target_dir: Option<PathBuf> = None;
 
-    // 1. If playlist_name is provided, always open that specific playlist folder
-    if !p_name.is_empty() && p_name.to_lowercase() != "all" && p_name.to_lowercase() != "singles" {
-        let clean_p = p_name.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_");
-        let sub = downloads_root.join(&clean_p);
-        target_dir = Some(sub);
-    }
-
-    // 2. If no playlist_name, use path if provided
-    if target_dir.is_none() && !raw_p.is_empty() {
-        let p_buf = PathBuf::from(&raw_p);
+    // 1. If explicit filepath/folderpath is provided, prioritize it
+    if !raw_p.is_empty() {
+        let mut clean_raw = raw_p.clone();
+        if clean_raw.starts_with(r"\\?\") {
+            clean_raw = clean_raw[4..].to_string();
+        }
+        let p_buf = PathBuf::from(&clean_raw);
         let abs_buf = if p_buf.is_absolute() {
             p_buf
         } else {
-            project_root.join(&p_buf)
+            active_output_dir.join(&p_buf)
         };
 
-        if abs_buf.is_file() || raw_p.ends_with(".mp3") || raw_p.ends_with(".m4a") || raw_p.ends_with(".flac") || raw_p.ends_with(".wav") || raw_p.ends_with(".xml") || raw_p.ends_with(".m3u8") || raw_p.ends_with(".txt") {
+        if abs_buf.is_file() || clean_raw.ends_with(".mp3") || clean_raw.ends_with(".m4a") || clean_raw.ends_with(".flac") || clean_raw.ends_with(".wav") || clean_raw.ends_with(".xml") || clean_raw.ends_with(".m3u8") || clean_raw.ends_with(".txt") {
             target_dir = abs_buf.parent().map(|p| p.to_path_buf());
         } else {
             target_dir = Some(abs_buf);
         }
     }
 
-    // 3. Fallback to downloads root
-    let final_dir = target_dir.unwrap_or(downloads_root);
+    // 2. If no valid path, check playlist_name inside active_output_dir
+    if target_dir.is_none() && !p_name.is_empty() && p_name.to_lowercase() != "all" && p_name.to_lowercase() != "singles" {
+        let clean_p = p_name.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let sub = active_output_dir.join(&clean_p);
+        target_dir = Some(sub);
+    }
+
+    // 3. Fallback to active output dir
+    let final_dir = target_dir.unwrap_or(active_output_dir);
     let _ = std::fs::create_dir_all(&final_dir);
     let final_str = final_dir.to_string_lossy().to_string();
 
