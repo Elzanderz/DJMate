@@ -397,8 +397,9 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     elif cmd_name == 'delete_history_track':
         from src.services.history_service import HistoryService
         filepath = payload.get('filepath', '')
+        track_id = payload.get('track_id') or payload.get('id')
         delete_file = payload.get('delete_file', False)
-        ok = HistoryService.delete_track(filepath, delete_file=delete_file)
+        ok = HistoryService.delete_track(filepath, delete_file=delete_file, track_id=track_id)
         return {'result': ok}
 
     elif cmd_name == 'export_rekordbox':

@@ -265,6 +265,35 @@ export default function App() {
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
   const [isRedownloadingStudio, setIsRedownloadingStudio] = useState<string | null>(null);
 
+  // Custom Styled DJ Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    track?: Track;
+    count?: number;
+    confirmText?: string;
+    cancelText?: string;
+    type?: 'danger' | 'warning' | 'info';
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+
+  const askConfirmation = (opts: {
+    title: string;
+    message: string;
+    track?: Track;
+    count?: number;
+    confirmText?: string;
+    cancelText?: string;
+    type?: 'danger' | 'warning' | 'info';
+    onConfirm: () => Promise<void> | void;
+  }) => {
+    setConfirmDialog({
+      ...opts,
+      isOpen: true,
+    });
+  };
+
   // Input & Queue State
   const [url, setUrl] = useState('');
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -1084,6 +1113,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       if (!a.artist || !b.artist || a.artist.toLowerCase().trim() === b.artist.toLowerCase().trim()) return true;
     }
     return false;
+  };
+
+  const stopAudioPlayback = () => {
+    stopCrossfade();
+    if (deckARef.current) {
+      deckARef.current.pause();
+      deckARef.current.src = '';
+    }
+    if (deckBRef.current) {
+      deckBRef.current.pause();
+      deckBRef.current.src = '';
+    }
+    setIsPlaying(false);
+    setActiveTrack(null);
   };
 
   const playTrack = async (t: Track, playlistContext?: Track[], forceSmooth: boolean = false) => {
@@ -2179,18 +2222,35 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     showToast(`Updated genre to "${genre}" for ${filepaths.length} tracks!`, 'success');
   };
 
-  const handleBatchDelete = async (deleteFromDisk: boolean = false) => {
+  const handleBatchDelete = (deleteFromDisk: boolean = true) => {
     const selectedTracks = selectedLibIndices.map((i) => filteredLibrary[i]).filter(Boolean);
-    const filepaths = selectedTracks.map(t => t.filepath).filter(Boolean) as string[];
+    const filepaths = selectedTracks.map((t) => t.filepath).filter(Boolean) as string[];
     if (filepaths.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${filepaths.length} tracks ${deleteFromDisk ? 'from library and disk' : 'from library'}?`)) return;
-    await invokeBackend('batch_delete_tracks', {
-      filepaths,
-      delete_files: deleteFromDisk
+
+    askConfirmation({
+      title: `ยืนยันการลบ ${selectedTracks.length} เพลง`,
+      message: `คุณต้องการลบ ${selectedTracks.length} เพลงที่เลือกออกจากคลังเพลง${deleteFromDisk ? ' และลบไฟล์ออกจากเครื่อง' : ''} หรือไม่?`,
+      count: selectedTracks.length,
+      type: 'danger',
+      confirmText: `🗑️ ยืนยันลบ ${selectedTracks.length} เพลง`,
+      cancelText: 'ยกเลิก',
+      onConfirm: async () => {
+        // If active track is deleted, stop player first
+        if (activeTrack && selectedTracks.some((t) => t.id === activeTrack.id || t.filepath === activeTrack.filepath)) {
+          stopAudioPlayback();
+        }
+        await invokeBackend('batch_delete_tracks', {
+          filepaths,
+          delete_files: deleteFromDisk
+        });
+        const selIds = new Set(selectedTracks.map((t) => t.id));
+        const selFps = new Set(filepaths);
+        setLibraryTracks((prev) => prev.filter((t) => !selIds.has(t.id) && (!t.filepath || !selFps.has(t.filepath))));
+        setSelectedLibIndices([]);
+        await refreshLibrary();
+        showToast(`ลบ ${filepaths.length} เพลงเรียบร้อยแล้ว`, 'info');
+      }
     });
-    setSelectedLibIndices([]);
-    refreshLibrary();
-    showToast(`Deleted ${filepaths.length} tracks`, 'info');
   };
 
   // Helper to reliably extract folder name from playlist_name, filepath, or source
@@ -2313,12 +2373,31 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     }
   };
 
-  const handleDeleteLibraryTrack = async (filepath: string, e: React.MouseEvent) => {
+  const handleDeleteLibraryTrack = (track: Track, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Delete track from Library & Disk?')) return;
-    await invokeBackend('delete_history_track', { filepath, delete_file: true });
-    refreshLibrary();
-    showToast('Track deleted', 'info');
+    askConfirmation({
+      title: 'ยืนยันการลบเพลง',
+      message: `คุณต้องการลบเพลง "${track.title}" ออกจากคลังเพลงและลบไฟล์ออกจากเครื่องอย่างถาวรหรือไม่?`,
+      track,
+      type: 'danger',
+      confirmText: '🗑️ ลบออกจากเครื่อง',
+      cancelText: 'ยกเลิก',
+      onConfirm: async () => {
+        // If currently playing, stop playback first so file lock is released
+        if (activeTrack && (activeTrack.id === track.id || activeTrack.filepath === track.filepath)) {
+          stopAudioPlayback();
+        }
+        await invokeBackend('delete_history_track', {
+          filepath: track.filepath,
+          track_id: track.id,
+          delete_file: true
+        });
+        // Optimistically remove from state
+        setLibraryTracks((prev) => prev.filter((t) => t.id !== track.id && (!track.filepath || t.filepath !== track.filepath)));
+        await refreshLibrary();
+        showToast(`ลบเพลง "${track.title}" ออกจากเครื่องแล้ว`, 'info');
+      }
+    });
   };
 
   const handleAddAllLibraryToMixtape = () => {
@@ -4028,7 +4107,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                           <button onClick={() => setEditingTrack({ ...t, index: idx, source: 'library' })} className="text-zinc-500 hover:text-white p-1">
                             ✏️
                           </button>
-                          <button onClick={(e) => t.filepath && handleDeleteLibraryTrack(t.filepath, e)} className="text-zinc-600 hover:text-rose-400 p-1">
+                          <button onClick={(e) => handleDeleteLibraryTrack(t, e)} className="text-zinc-600 hover:text-rose-400 p-1 transition hover:scale-110 active:scale-95" title="ลบเพลงนี้ออกจากเครื่องอย่างถาวร">
                             🗑️
                           </button>
                         </div>
@@ -8004,16 +8083,29 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     showToast('Removed track from mixtape', 'info');
                   } else if (contextMenu.source === 'drawer' && contextMenu.index !== undefined) {
                     handleRemoveFromQueue(contextMenu.index);
-                  } else if (contextMenu.track?.filepath) {
-                    if (confirm(`ลบเพลง "${contextMenu.track.title}" ออกจาก Library หรือไม่?`)) {
-                      invokeBackend('batch_delete_tracks', {
-                        filepaths: [contextMenu.track.filepath],
-                        delete_files: false,
-                      }).then(() => {
-                        refreshLibrary();
-                        showToast('Deleted track from library', 'info');
-                      });
-                    }
+                  } else if (contextMenu.track) {
+                    const trk = contextMenu.track;
+                    askConfirmation({
+                      title: 'ยืนยันการลบเพลง',
+                      message: `คุณต้องการลบเพลง "${trk.title}" ออกจากคลังเพลงและลบไฟล์ออกจากเครื่องหรือไม่?`,
+                      track: trk,
+                      type: 'danger',
+                      confirmText: '🗑️ ลบเพลงออกจากเครื่อง',
+                      cancelText: 'ยกเลิก',
+                      onConfirm: async () => {
+                        if (activeTrack && (activeTrack.id === trk.id || activeTrack.filepath === trk.filepath)) {
+                          stopAudioPlayback();
+                        }
+                        await invokeBackend('delete_history_track', {
+                          filepath: trk.filepath,
+                          track_id: trk.id,
+                          delete_file: true
+                        });
+                        setLibraryTracks((prev) => prev.filter((item) => item.id !== trk.id && (!trk.filepath || item.filepath !== trk.filepath)));
+                        await refreshLibrary();
+                        showToast(`ลบเพลง "${trk.title}" เรียบร้อยแล้ว`, 'info');
+                      }
+                    });
                   }
                   closeContextMenu();
                 }}
@@ -8190,6 +8282,79 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         }}
         showToast={showToast}
       />
+
+      {/* Custom Styled Pro DJ Confirm Dialog Modal */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div
+            className="w-full max-w-md rounded-2xl bg-[#14141a] border border-rose-500/30 p-6 shadow-2xl shadow-rose-950/40 relative flex flex-col space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-2xl text-rose-400 flex-shrink-0 shadow-inner">
+                {confirmDialog.type === 'danger' ? '🗑️' : '⚠️'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-white tracking-wide">{confirmDialog.title}</h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{confirmDialog.message}</p>
+              </div>
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Optional Track Preview Card */}
+            {confirmDialog.track && (
+              <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-[#202026] overflow-hidden flex-shrink-0 border border-white/5 shadow">
+                  {confirmDialog.track.cover_url ? (
+                    <img src={confirmDialog.track.cover_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-lg">🎵</div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-white truncate">{confirmDialog.track.title}</p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">{confirmDialog.track.artist || 'Unknown Artist'}</p>
+                  {confirmDialog.track.filepath && (
+                    <p className="text-[10px] text-zinc-500 font-mono truncate mt-1">📁 {confirmDialog.track.filepath}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Warning Alert Banner */}
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-950/30 border border-rose-500/20 flex items-center gap-2.5 text-rose-300 text-xs">
+              <span className="text-sm">⚠️</span>
+              <span>ไฟล์เพลงนี้จะถูกลบออกจากคลังและดิสก์อย่างถาวร</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white font-semibold text-xs border border-white/5 transition"
+              >
+                {confirmDialog.cancelText || 'ยกเลิก'}
+              </button>
+              <button
+                onClick={async () => {
+                  const cb = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  if (cb) await cb();
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-rose-900/40 transition active:scale-95 flex items-center gap-2"
+              >
+                <span>{confirmDialog.confirmText || '🗑️ ลบถาวร'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

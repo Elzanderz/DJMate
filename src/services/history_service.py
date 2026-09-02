@@ -448,18 +448,43 @@ class HistoryService:
             print(f"[HistoryService] Error saving track: {e}")
 
     @classmethod
-    def delete_track(cls, filepath: str, delete_file: bool = False) -> bool:
+    def delete_track(cls, filepath: str, delete_file: bool = False, track_id: Optional[str] = None) -> bool:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        tracks = [t for t in tracks if t.get('filepath') != filepath]
+        norm_target = os.path.normpath(filepath).lower() if filepath else ''
+        
+        remaining = []
+        target_path_to_delete = None
+        for t in tracks:
+            t_fp = t.get('filepath', '')
+            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
+            t_id = t.get('id', '')
+            if (norm_target and t_norm == norm_target) or (track_id and t_id == track_id):
+                target_path_to_delete = t_fp or filepath
+                continue
+            remaining.append(t)
+
         try:
             with open(db_file, 'w', encoding='utf-8') as f:
-                json.dump(tracks, f, ensure_ascii=False, indent=2)
-            if delete_file and filepath and os.path.exists(filepath):
-                os.remove(filepath)
+                json.dump(remaining, f, ensure_ascii=False, indent=2)
+            
+            p_to_del = target_path_to_delete or filepath
+            if delete_file and p_to_del:
+                norm_p = os.path.normpath(p_to_del)
+                if os.path.exists(norm_p):
+                    try:
+                        os.remove(norm_p)
+                    except Exception as err:
+                        import gc
+                        gc.collect()
+                        try:
+                            os.remove(norm_p)
+                        except Exception as err2:
+                            print(f"[HistoryService] Warning: Could not delete physical file: {err2}")
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[HistoryService] Error deleting track from DB: {e}")
             return False
 
     @classmethod
@@ -467,9 +492,11 @@ class HistoryService:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        target_fps = set(filepaths)
+        target_fps = {os.path.normpath(fp).lower() for fp in filepaths if fp}
         for t in tracks:
-            if t.get('filepath') in target_fps:
+            t_fp = t.get('filepath', '')
+            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
+            if t_norm in target_fps:
                 t.update(updated_fields)
         try:
             with open(db_file, 'w', encoding='utf-8') as f:
@@ -483,21 +510,32 @@ class HistoryService:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        target_fps = set(filepaths)
+        target_fps = {os.path.normpath(fp).lower() for fp in filepaths if fp}
         remaining = []
+        deleted_paths = []
         for t in tracks:
-            fp = t.get('filepath', '')
-            if fp in target_fps:
-                if delete_files and fp and os.path.exists(fp):
-                    try:
-                        os.remove(fp)
-                    except Exception:
-                        pass
+            t_fp = t.get('filepath', '')
+            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
+            if t_norm in target_fps:
+                deleted_paths.append(t_fp)
             else:
                 remaining.append(t)
         try:
             with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(remaining, f, ensure_ascii=False, indent=2)
+            if delete_files:
+                for fp in deleted_paths:
+                    norm_p = os.path.normpath(fp)
+                    if os.path.exists(norm_p):
+                        try:
+                            os.remove(norm_p)
+                        except Exception:
+                            import gc
+                            gc.collect()
+                            try:
+                                os.remove(norm_p)
+                            except Exception:
+                                pass
             return True
         except Exception:
             return False
