@@ -295,8 +295,9 @@ class RekordboxService:
                 except Exception as e:
                     print(f"Error copying to target: {e}")
 
+            clean_pname = re.sub(r'[\\/*?:"<>|]', '_', playlist_name)
             xml_p = os.path.join(target_root, 'rekordbox.xml')
-            m3u8_p = os.path.join(target_root, f"{re.sub(r'[\\/*?:\"<>|]', '_', playlist_name)}.m3u8")
+            m3u8_p = os.path.join(target_root, f"{clean_pname}.m3u8")
             cls.export_rekordbox_xml(copied_tracks, xml_p, playlist_name=playlist_name)
             cls.export_m3u8(copied_tracks, m3u8_p, playlist_name=playlist_name)
 

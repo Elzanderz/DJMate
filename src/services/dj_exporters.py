@@ -69,7 +69,8 @@ class DJExportersService:
             fn = os.path.basename(fp) if fp else f"{t.get('title', 'Track')}.mp3"
             dp = os.path.dirname(os.path.abspath(fp)) if fp else ''
             e = ET.SubElement(pl_elem, 'ENTRY')
-            ET.SubElement(e, 'PRIMARYKEY', TYPE='TRACK', KEY=f"C:{dp.replace('\\', '/')}/{fn}")
+            dp_clean = dp.replace('\\', '/')
+            ET.SubElement(e, 'PRIMARYKEY', TYPE='TRACK', KEY=f"C:{dp_clean}/{fn}")
 
         raw_xml = ET.tostring(root, encoding='utf-8')
         pretty_xml = minidom.parseString(raw_xml).toprettyxml(indent='  ', encoding='utf-8')
