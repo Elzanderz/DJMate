@@ -275,6 +275,46 @@ export default function App() {
     onConfirm: () => Promise<void> | void;
   } | null>(null);
 
+  // Settings & System Health Modal State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'folder' | 'audio' | 'system'>('folder');
+  const [settingsPathInput, setSettingsPathInput] = useState('');
+  const [systemHealth, setSystemHealth] = useState<any>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+
+  const handleFetchSystemHealth = async () => {
+    setIsCheckingHealth(true);
+    try {
+      const res = await invokeBackend('check_system_health');
+      if (res) {
+        setSystemHealth(res);
+      }
+    } catch (e: any) {
+      console.error(e);
+      setSystemHealth({ error: String(e) });
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
+  const handleSaveCustomOutputDir = async (customPath?: string) => {
+    const pathToSave = (customPath || settingsPathInput).trim();
+    if (!pathToSave) {
+      showToast('กรุณาระบุที่อยู่โฟลเดอร์', 'error');
+      return;
+    }
+    try {
+      const saved = await invokeBackend('set_output_dir', { path: pathToSave });
+      const finalPath = typeof saved === 'string' ? saved : (saved?.result || saved?.path || pathToSave);
+      setOutputDir(finalPath);
+      setSettingsPathInput(finalPath);
+      showToast(`บันทึกโฟลเดอร์เพลงเป็น: ${finalPath}`, 'success');
+      refreshLibrary();
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาดในการบันทึกโฟลเดอร์: ' + e, 'error');
+    }
+  };
+
   const askConfirmation = (opts: {
     title: string;
     message: string;
@@ -2939,9 +2979,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               <span>🎵</span>
               <span>M3U8 Playlist</span>
             </div>
-            <div onClick={handleBrowseDir} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
-              <span>📁</span>
-              <span>Set Save Folder</span>
+            <div
+              onClick={() => {
+                setSettingsPathInput(outputDir);
+                setShowSettingsModal(true);
+                handleFetchSystemHealth();
+              }}
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-[#1DB954] cursor-pointer transition text-white font-semibold"
+            >
+              <span>⚙️</span>
+              <span>Settings (ตั้งค่าระบบ)</span>
             </div>
           </div>
         </div>
@@ -3078,6 +3125,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               <option value="-16">🎧 Streaming (-16 LUFS)</option>
               <option value="off">🚫 No Normalization</option>
             </select>
+
+            {/* Settings Button */}
+            <button
+              onClick={() => {
+                setSettingsPathInput(outputDir);
+                setShowSettingsModal(true);
+                handleFetchSystemHealth();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-[#242424] hover:bg-[#282828] text-white text-xs font-semibold border border-[#333333] transition flex items-center gap-1.5 cursor-pointer"
+              title="เปิดหน้าต่างตั้งค่าระบบและโฟลเดอร์เพลง (Settings)"
+            >
+              <span>⚙️</span>
+              <span className="hidden sm:inline">Settings</span>
+            </button>
           </div>
         </div>
 
@@ -8296,6 +8357,297 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-rose-900/40 transition active:scale-95 flex items-center gap-2"
               >
                 <span>{confirmDialog.confirmText || '🗑️ ลบถาวร'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= SETTINGS & SYSTEM HEALTH MODAL ================= */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div
+            className="w-full max-w-2xl rounded-3xl bg-[#141418] border border-[#333333] p-6 shadow-2xl shadow-black/80 relative flex flex-col space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#242424] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#1DB954]/15 border border-[#1DB954]/30 flex items-center justify-center text-xl text-[#1DB954]">
+                  ⚙️
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-wide">การตั้งค่าระบบ (Settings & Storage)</h3>
+                  <p className="text-xs text-[#a7a7a7]">จัดการโฟลเดอร์เพลง คุณภาพเสียง และตรวจสอบความพร้อมของระบบ</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex items-center gap-2 border-b border-[#242424] pb-2">
+              <button
+                onClick={() => setSettingsActiveTab('folder')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === 'folder'
+                    ? 'bg-[#1DB954] text-black shadow'
+                    : 'bg-[#1c1c22] text-[#a7a7a7] hover:text-white'
+                }`}
+              >
+                <span>📁</span>
+                <span>โฟลเดอร์เพลง (Music Folder)</span>
+              </button>
+              <button
+                onClick={() => setSettingsActiveTab('audio')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === 'audio'
+                    ? 'bg-[#1DB954] text-black shadow'
+                    : 'bg-[#1c1c22] text-[#a7a7a7] hover:text-white'
+                }`}
+              >
+                <span>🎧</span>
+                <span>คุณภาพเสียง (Audio Format)</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSettingsActiveTab('system');
+                  handleFetchSystemHealth();
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === 'system'
+                    ? 'bg-[#1DB954] text-black shadow'
+                    : 'bg-[#1c1c22] text-[#a7a7a7] hover:text-white'
+                }`}
+              >
+                <span>🩺</span>
+                <span>สถานะระบบ (System Health)</span>
+              </button>
+            </div>
+
+            {/* Tab 1: Folder Storage */}
+            {settingsActiveTab === 'folder' && (
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1 py-1">
+                <div>
+                  <label className="block text-xs font-bold text-white mb-1.5">
+                    ตำแหน่งโฟลเดอร์สำหรับดาวน์โหลดและสแกนคลังเพลง:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={settingsPathInput}
+                      onChange={(e) => setSettingsPathInput(e.target.value)}
+                      placeholder="เช่น C:\Music\DJMate หรือ /Users/name/Music/DJMate..."
+                      className="flex-1 bg-[#0c0c0f] text-white text-xs px-3.5 py-2.5 rounded-xl border border-[#333333] focus:border-[#1DB954] focus:outline-none font-mono transition"
+                    />
+                    <button
+                      onClick={() => handleSaveCustomOutputDir()}
+                      className="px-4 py-2.5 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold text-xs shadow transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>💾</span>
+                      <span>บันทึก</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#a7a7a7] mt-1.5">
+                    * สามารถพิมพ์หรือ Paste ที่อยู่โฟลเดอร์บนเครื่อง Mac / Windows ได้โดยตรง
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5 pt-1">
+                  <button
+                    onClick={handleBrowseDir}
+                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#2e2e2e] text-white text-xs font-semibold border border-[#3e3e3e] transition flex items-center gap-2"
+                  >
+                    <span>📁</span>
+                    <span>เปิดหน้าต่างเลือกโฟลเดอร์ (Browse OS Dialog)</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenFolder}
+                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#2e2e2e] text-zinc-300 hover:text-white text-xs font-semibold border border-[#3e3e3e] transition flex items-center gap-2"
+                  >
+                    <span>📂</span>
+                    <span>เปิดโฟลเดอร์ใน Finder / Explorer</span>
+                  </button>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="pt-2 border-t border-[#242424]">
+                  <span className="text-[11px] font-bold text-[#a7a7a7] block mb-2">ตำแหน่งโฟลเดอร์แนะนำ (Quick Presets):</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('~/Music/DJMate_Music')}
+                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
+                    >
+                      🍏 ~/Music/DJMate_Music (Mac Standard)
+                    </button>
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('downloads')}
+                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
+                    >
+                      📁 Project Downloads
+                    </button>
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('~/Desktop/DJ_Set')}
+                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
+                    >
+                      🖥️ ~/Desktop/DJ_Set
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Audio Format & Quality */}
+            {settingsActiveTab === 'audio' && (
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1 py-1 text-xs">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-white mb-1">รูปแบบไฟล์เสียง (Format):</label>
+                    <select
+                      value={format}
+                      onChange={(e) => setFormat(e.target.value)}
+                      className="w-full bg-[#0c0c0f] text-white text-xs font-semibold p-2.5 rounded-xl border border-[#333333] focus:outline-none"
+                    >
+                      <option value="MP3">MP3 320kbps (DJ Standard)</option>
+                      <option value="FLAC">FLAC Lossless (Studio Master)</option>
+                      <option value="M4A">M4A / AAC (Apple Music Quality)</option>
+                      <option value="WAV">WAV (Uncompressed)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-white mb-1">การแยกส่วนเสียง (Stems):</label>
+                    <select
+                      value={stemType}
+                      onChange={(e) => setStemType(e.target.value)}
+                      className="w-full bg-[#0c0c0f] text-white text-xs font-semibold p-2.5 rounded-xl border border-[#333333] focus:outline-none"
+                    >
+                      <option value="full">🎵 Full Track (เพลงเต็ม)</option>
+                      <option value="acapella">🎤 Acapella (เฉพาะเสียงร้อง)</option>
+                      <option value="instrumental">🎹 Instrumental (เฉพาะบีท/ดนตรี)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-white mb-1">การจัดระเบียบโฟลเดอร์:</label>
+                    <select
+                      value={folderMode}
+                      onChange={(e) => setFolderMode(e.target.value)}
+                      className="w-full bg-[#0c0c0f] text-white text-xs font-semibold p-2.5 rounded-xl border border-[#333333] focus:outline-none"
+                    >
+                      <option value="playlist">📁 By Playlist / Chart (แยกตามโฟลเดอร์เพลย์ลิสต์)</option>
+                      <option value="single">📁 Single Folder (โฟลเดอร์รวม ไม่แยกย่อย)</option>
+                      <option value="artist_album">👤 Artist / Album</option>
+                      <option value="camelot_key">🎛️ Camelot Key</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-white mb-1">Auto-Gain Volume (ความดังเสียงมาตรฐาน):</label>
+                    <select
+                      value={normalizeAudio ? `${targetLufs}` : 'off'}
+                      onChange={(e) => {
+                        if (e.target.value === 'off') {
+                          setNormalizeAudio(false);
+                        } else {
+                          setNormalizeAudio(true);
+                          setTargetLufs(parseFloat(e.target.value));
+                        }
+                      }}
+                      className="w-full bg-[#0c0c0f] text-white text-xs font-semibold p-2.5 rounded-xl border border-[#333333] focus:outline-none"
+                    >
+                      <option value="-14">⚖️ -14 LUFS (DJ / Club Standard)</option>
+                      <option value="-12">🔊 -12 LUFS (Club Loud Boost)</option>
+                      <option value="-16">🎧 -16 LUFS (Streaming Soft)</option>
+                      <option value="off">🚫 ปิดการปรับระดับเสียง</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: System Health & Python Diagnostic */}
+            {settingsActiveTab === 'system' && (
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1 py-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white">ผลการตรวจสถานะระบบ Python Backend:</span>
+                  <button
+                    onClick={handleFetchSystemHealth}
+                    disabled={isCheckingHealth}
+                    className="px-3 py-1 rounded-lg bg-[#242424] hover:bg-[#2e2e2e] text-zinc-300 hover:text-white font-semibold text-xs border border-white/10 transition flex items-center gap-1.5"
+                  >
+                    <span>🔄</span>
+                    <span>{isCheckingHealth ? 'กำลังตรวจ...' : 'ตรวจใหม่'}</span>
+                  </button>
+                </div>
+
+                {systemHealth ? (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-[#0c0c0f] border border-[#242424] space-y-1.5 font-mono text-[11px]">
+                      <p><strong className="text-zinc-400">Python Version:</strong> <span className="text-[#1DB954]">{systemHealth.python_version || 'Detected'}</span></p>
+                      <p><strong className="text-zinc-400">OS Platform:</strong> <span className="text-white">{systemHealth.platform || 'Unknown'}</span></p>
+                      {systemHealth.executable && (
+                        <p className="truncate"><strong className="text-zinc-400">Python Path:</strong> <span className="text-zinc-300">{systemHealth.executable}</span></p>
+                      )}
+                    </div>
+
+                    {systemHealth.modules && (
+                      <div>
+                        <span className="font-bold text-zinc-300 block mb-2">โมดูลที่จำเป็นสำหรับดาวน์โหลดและวิเคราะห์เพลง:</span>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Object.entries(systemHealth.modules).map(([mod, ok]) => (
+                            <div key={mod} className={`p-2 rounded-xl border flex items-center justify-between font-mono text-[11px] ${ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
+                              <span>{mod}</span>
+                              <span>{ok ? '✓ ติดตั้งแล้ว' : '✗ ไม่พบ'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-[#0c0c0f] text-center text-zinc-400">
+                    กดปุ่ม "ตรวจใหม่" เพื่อตรวจสอบสถานะของ Python บนเครื่อง
+                  </div>
+                )}
+
+                {/* macOS Helper Box */}
+                <div className="p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-indigo-300">
+                    <span>💡</span>
+                    <span>สำหรับผู้ใช้ Mac หากติดปัญหาดาวน์โหลดเพลง:</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-300 leading-relaxed">
+                    เปิด Terminal บน Mac แล้วคัดลอกคำสั่งนี้ไปวางเพื่อติดตั้งโมดูลที่จำเป็นทั้งหมด:
+                  </p>
+                  <div className="flex items-center gap-2 bg-black/60 p-2 rounded-xl border border-white/5 font-mono text-[11px] text-emerald-400">
+                    <span className="flex-1 truncate">pip3 install yt-dlp mutagen requests urllib3 pillow numpy</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText('pip3 install yt-dlp mutagen requests urllib3 pillow numpy');
+                        showToast('คัดลอกคำสั่ง Terminal เรียบร้อยแล้ว!', 'success');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold text-[10px] transition shrink-0"
+                    >
+                      คัดลอก
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-end border-t border-[#242424] pt-3">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="px-5 py-2 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold text-xs transition active:scale-95 shadow"
+              >
+                เสร็จสิ้น (Done)
               </button>
             </div>
           </div>

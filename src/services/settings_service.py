@@ -49,7 +49,8 @@ class SettingsService:
         if not new_path or not new_path.strip():
             return cls.get_output_dir()
         
-        path_abs = os.path.abspath(new_path.strip())
+        expanded = os.path.expanduser(new_path.strip())
+        path_abs = os.path.abspath(expanded)
         os.makedirs(path_abs, exist_ok=True)
         
         settings = cls.get_settings()

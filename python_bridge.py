@@ -39,7 +39,23 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     output_dir = SettingsService.get_output_dir()
     os.makedirs(output_dir, exist_ok=True)
 
-    if cmd_name == 'get_output_dir':
+    if cmd_name == 'check_system_health':
+        health = {
+            'python_version': sys.version.split()[0],
+            'executable': sys.executable,
+            'platform': sys.platform,
+            'output_dir': output_dir,
+            'modules': {}
+        }
+        for mod in ('yt_dlp', 'mutagen', 'requests', 'urllib3', 'PIL', 'numpy'):
+            try:
+                __import__(mod)
+                health['modules'][mod] = True
+            except Exception:
+                health['modules'][mod] = False
+        return {'result': health}
+
+    elif cmd_name == 'get_output_dir':
         return {'result': output_dir}
 
     elif cmd_name == 'set_output_dir':

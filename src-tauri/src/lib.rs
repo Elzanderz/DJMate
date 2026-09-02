@@ -17,6 +17,8 @@ fn find_bridge_script() -> PathBuf {
         if let Some(parent) = exe.parent() {
             candidates.push(parent.join("python_bridge.py"));
             candidates.push(parent.join("../Resources/python_bridge.py"));
+            candidates.push(parent.join("../Resources/_up_/python_bridge.py"));
+            candidates.push(parent.join("../../Resources/python_bridge.py"));
             candidates.push(parent.join("../../../python_bridge.py"));
         }
     }
@@ -26,55 +28,85 @@ fn find_bridge_script() -> PathBuf {
             return c.clone();
         }
     }
+
+    // Deep search in parent folders / Resources
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let res_dir = parent.join("../Resources");
+            if res_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&res_dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path().join("python_bridge.py");
+                        if p.exists() {
+                            return p;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     PathBuf::from("python_bridge.py")
 }
 
 fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     let script_path = find_bridge_script();
+    let script_dir = script_path.parent().unwrap_or(&PathBuf::from(".")).to_path_buf();
     let req = json!({
         "cmd": cmd,
         "args": payload
     });
     let req_str = serde_json::to_string(&req).map_err(|e| e.to_string())?;
 
-    let primary_bin = if cfg!(target_os = "windows") { "py" } else { "python3" };
-    let secondary_bin = if cfg!(target_os = "windows") { "python3" } else { "python" };
-    let tertiary_bin = if cfg!(target_os = "windows") { "python" } else { "py" };
-
-    let mut py_cmd = Command::new(primary_bin);
-    py_cmd.arg(&script_path)
-        .env("PYTHONIOENCODING", "utf-8")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
+    let mut python_bins = Vec::new();
     #[cfg(target_os = "windows")]
-    py_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    {
+        python_bins.push("py".to_string());
+        python_bins.push("python3".to_string());
+        python_bins.push("python".to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        python_bins.push("python3".to_string());
+        python_bins.push("/opt/homebrew/bin/python3".to_string());
+        python_bins.push("/usr/local/bin/python3".to_string());
+        python_bins.push("/usr/bin/python3".to_string());
+        python_bins.push("python".to_string());
+    }
 
-    let mut child = py_cmd.spawn()
-        .or_else(|_| {
-            let mut fallback = Command::new(secondary_bin);
-            fallback.arg(&script_path)
-                .env("PYTHONIOENCODING", "utf-8")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            #[cfg(target_os = "windows")]
-            fallback.creation_flags(0x08000000);
-            fallback.spawn()
-        })
-        .or_else(|_| {
-            let mut fallback = Command::new(tertiary_bin);
-            fallback.arg(&script_path)
-                .env("PYTHONIOENCODING", "utf-8")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            #[cfg(target_os = "windows")]
-            fallback.creation_flags(0x08000000);
-            fallback.spawn()
-        })
-        .map_err(|e| format!("Failed to execute python: {}", e))?;
+    let mut last_spawn_err = String::new();
+    let mut child_opt = None;
+
+    for bin in &python_bins {
+        let mut py_cmd = Command::new(bin);
+        py_cmd.arg(&script_path)
+            .current_dir(&script_dir)
+            .env("PYTHONPATH", &script_dir)
+            .env("PYTHONIOENCODING", "utf-8")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(target_os = "windows")]
+        py_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        match py_cmd.spawn() {
+            Ok(c) => {
+                child_opt = Some(c);
+                break;
+            }
+            Err(e) => {
+                last_spawn_err = format!("Failed to spawn {}: {}", bin, e);
+            }
+        }
+    }
+
+    let mut child = child_opt.ok_or_else(|| {
+        format!(
+            "Could not find Python 3 executable on system. Please ensure Python 3 is installed.\nDetail: {}",
+            last_spawn_err
+        )
+    })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(req_str.as_bytes()).map_err(|e| e.to_string())?;
@@ -83,6 +115,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
 
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Search for valid JSON from the last line backwards to filter out any stdout noise
     let mut parsed_opt: Option<Value> = None;
@@ -98,8 +131,16 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
 
     let parsed = match parsed_opt {
         Some(val) => val,
-        None => serde_json::from_str(stdout.trim())
-            .map_err(|e| format!("Invalid JSON from python: {} (raw: {})", e, stdout))?,
+        None => {
+            let err_msg = if !stderr.trim().is_empty() {
+                format!("Python Error:\n{}\n\nOutput: {}", stderr.trim(), stdout.trim())
+            } else if stdout.trim().is_empty() {
+                "Python returned empty output. Please make sure Python 3 and dependencies (yt-dlp, mutagen, requests) are installed on your system.\nTry running: pip3 install yt-dlp mutagen requests".to_string()
+            } else {
+                format!("Invalid JSON from python: {}\nDetail: {}", stdout.trim(), stderr.trim())
+            };
+            return Err(err_msg);
+        }
     };
 
     if let Some(err) = parsed.get("error") {
@@ -107,6 +148,13 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     }
 
     Ok(parsed.get("result").cloned().unwrap_or(Value::Null))
+}
+
+#[tauri::command]
+async fn check_system_health() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| run_bridge("check_system_health", json!({})))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -605,7 +653,8 @@ pub fn run() {
             set_output_dir,
             search_music_unified,
             search_local_folder,
-            search_online_tracks
+            search_online_tracks,
+            check_system_health
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
