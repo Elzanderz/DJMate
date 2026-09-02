@@ -443,6 +443,14 @@ class DJCrateService:
                     if not os.path.exists(dest_fp) or os.path.getsize(dest_fp) != os.path.getsize(src_fp):
                         shutil.copy2(src_fp, dest_fp)
 
+                    try:
+                        from src.services.tagger_service import TaggerService
+                        t_tag = dict(t)
+                        t_tag['track_number'] = idx
+                        TaggerService.apply_tags(dest_fp, t_tag)
+                    except Exception:
+                        pass
+
                     t_entry = dict(t)
                     t_entry['filepath'] = dest_fp
                     t_entry['playlist_name'] = prof['name']

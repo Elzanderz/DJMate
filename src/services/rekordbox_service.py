@@ -288,6 +288,16 @@ class RekordboxService:
                 try:
                     if not os.path.exists(dest_fp) or os.path.getsize(dest_fp) != os.path.getsize(src_fp):
                         shutil.copy2(src_fp, dest_fp)
+                    
+                    # Ensure ID3 Track Number tag is written with the accurate sequential index
+                    try:
+                        from src.services.tagger_service import TaggerService
+                        t_tag = dict(t)
+                        t_tag['track_number'] = idx
+                        TaggerService.apply_tags(dest_fp, t_tag)
+                    except Exception:
+                        pass
+
                     t_entry = dict(t)
                     t_entry['filepath'] = dest_fp
                     t_entry['track_number'] = idx
@@ -324,7 +334,7 @@ class RekordboxService:
             folders_res = []
 
             for pname, p_tracks in groups.items():
-                clean_pname = re.sub(r'[\\/*?:\"<>|]', '_', pname).strip()
+                clean_pname = re.sub(r'[\\/*?:"<>|]', '_', pname).strip()
                 p_dir = os.path.join(target_root, clean_pname)
                 os.makedirs(p_dir, exist_ok=True)
 
@@ -338,6 +348,16 @@ class RekordboxService:
                     try:
                         if not os.path.exists(dest_fp) or os.path.getsize(dest_fp) != os.path.getsize(src_fp):
                             shutil.copy2(src_fp, dest_fp)
+                        
+                        # Ensure ID3 Track Number tag is written with the accurate sequential index
+                        try:
+                            from src.services.tagger_service import TaggerService
+                            t_tag = dict(t)
+                            t_tag['track_number'] = idx
+                            TaggerService.apply_tags(dest_fp, t_tag)
+                        except Exception:
+                            pass
+
                         t_entry = dict(t)
                         t_entry['filepath'] = dest_fp
                         t_entry['playlist_name'] = pname

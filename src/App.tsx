@@ -1890,9 +1890,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
     const effectiveFolderMode = target.folder_mode || folderMode;
 
+    const targetWithIndex = {
+      ...target,
+      track_number: target.track_number || (index + 1),
+    };
+
     try {
       const res = await invokeBackend('download_single', {
-        track: target,
+        track: targetWithIndex,
         audio_format: format,
         quality: quality,
         stem_type: stemType,
