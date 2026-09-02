@@ -40,13 +40,18 @@ from src.services.music_sources_service import SoundCloudService, AppleMusicServ
 from src.services.ai_curator_service import AICuratorService
 from src.services.dj_exporters import DJExportersService
 from src.services.music_search_service import MusicSearchService
+from src.services.settings_service import SettingsService
+from src.services.dj_crate_service import DJCrateService
+from src.services.cleaner_service import CleanerService
+from src.services.activity_service import ActivityService
+from src.services.mashup_service import MashupService
+from src.services.shazam_service import ShazamService
 import subprocess
 import re
 import base64
 
 def handle_command(cmd_name: str, payload: dict) -> dict:
     spotify_service = SpotifyService()
-    from src.services.settings_service import SettingsService
     output_dir = SettingsService.get_output_dir()
     os.makedirs(output_dir, exist_ok=True)
 
@@ -431,8 +436,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': ok}
 
     elif cmd_name == 'convert_mp4_to_mp3':
-        from src.services.downloader_service import DownloaderService
-        from src.services.history_service import HistoryService
         target_dir = payload.get('target_dir') or output_dir
         ffmpeg_exe = DownloaderService.get_ffmpeg_path()
         converted_count = 0
@@ -510,7 +513,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
             track['filepath'] = target_file
             track['done'] = True
             track['statusText'] = 'Downloaded'
-            from src.services.history_service import HistoryService
             HistoryService.save_track(track)
             return {'result': {'success': True, 'track': track, 'filepath': target_file}}
         except Exception as e:
@@ -519,7 +521,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     elif cmd_name == 'batch_normalize_tracks':
         filepaths = payload.get('filepaths', [])
         target_lufs = float(payload.get('target_lufs', -14.0))
-        from src.services.audio_normalizer_service import AudioNormalizerService
         res = AudioNormalizerService.batch_normalize_files(filepaths, target_lufs=target_lufs)
         return {'result': res}
 
