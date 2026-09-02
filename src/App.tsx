@@ -297,6 +297,11 @@ export default function App() {
     }
   };
 
+  const cleanDisplayPath = (p: string) => {
+    if (!p) return '';
+    return p.replace(/^\\\\\?\\/, '');
+  };
+
   const handleSaveCustomOutputDir = async (customPath?: string) => {
     const pathToSave = (customPath || settingsPathInput).trim();
     if (!pathToSave) {
@@ -305,10 +310,11 @@ export default function App() {
     }
     try {
       const saved = await invokeBackend('set_output_dir', { path: pathToSave });
-      const finalPath = typeof saved === 'string' ? saved : (saved?.result || saved?.path || pathToSave);
-      setOutputDir(finalPath);
-      setSettingsPathInput(finalPath);
-      showToast(`บันทึกโฟลเดอร์เพลงเป็น: ${finalPath}`, 'success');
+      const raw = typeof saved === 'string' ? saved : (saved?.result || saved?.path || pathToSave);
+      const cleaned = cleanDisplayPath(raw);
+      setOutputDir(cleaned);
+      setSettingsPathInput(cleaned);
+      showToast(`บันทึกโฟลเดอร์เพลงเป็น: ${cleaned}`, 'success');
       refreshLibrary();
     } catch (e: any) {
       showToast('เกิดข้อผิดพลาดในการบันทึกโฟลเดอร์: ' + e, 'error');
@@ -2458,12 +2464,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       const res = await invokeBackend('browse_folder');
       const selectedPath = typeof res === 'string' ? res : (res?.result || res?.path);
       if (selectedPath) {
-        setOutputDir(selectedPath);
-        showToast(`เปลี่ยนโฟลเดอร์เพลงเป็น: ${selectedPath}`, 'success');
+        const cleaned = cleanDisplayPath(selectedPath);
+        setOutputDir(cleaned);
+        setSettingsPathInput(cleaned);
+        showToast(`เลือกโฟลเดอร์สำเร็จ: ${cleaned}`, 'success');
         refreshLibrary();
       }
     } catch (e: any) {
-      showToast('ไม่สามารถเลือกโฟลเดอร์ได้', 'error');
+      showToast('ไม่สามารถเลือกโฟลเดอร์ได้: ' + e, 'error');
     }
   };
 
@@ -8432,73 +8440,91 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             {/* Tab 1: Folder Storage */}
             {settingsActiveTab === 'folder' && (
               <div className="space-y-4 overflow-y-auto flex-1 pr-1 py-1">
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1.5">
-                    ตำแหน่งโฟลเดอร์สำหรับดาวน์โหลดและสแกนคลังเพลง:
-                  </label>
-                  <div className="flex items-center gap-2">
+                {/* 1-Click Native OS Folder Picker Button */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-[#1DB954]/15 via-[#1DB954]/5 to-transparent border border-[#1DB954]/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                  <div className="space-y-1 text-center sm:text-left">
+                    <h4 className="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+                      <span>📁</span>
+                      <span>เลือกโฟลเดอร์เพลงในเครื่อง</span>
+                    </h4>
+                    <p className="text-xs text-[#b3b3b3]">
+                      กดปุ่มเพื่อเปิดหน้าต่างเลือกโฟลเดอร์ของระบบ Mac / Windows และบันทึกทันที
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBrowseDir}
+                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs shadow-lg shadow-[#1DB954]/20 transition active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                  >
+                    <span>📂</span>
+                    <span>กดเลือกโฟลเดอร์ได้ทันที</span>
+                  </button>
+                </div>
+
+                {/* Current Active Output Directory */}
+                <div className="p-3.5 rounded-2xl bg-[#0c0c0f] border border-[#282828] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-300">โฟลเดอร์ปัจจุบันที่กำลังใช้งาน:</span>
+                    <button
+                      onClick={handleOpenFolder}
+                      className="px-2.5 py-1 rounded-lg bg-[#1f1f24] hover:bg-[#282830] text-zinc-300 hover:text-white text-[11px] font-semibold border border-white/5 transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>↗️</span>
+                      <span>เปิดดูใน Finder / Explorer</span>
+                    </button>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-black/60 border border-white/5 font-mono text-xs text-[#1DB954] break-all select-all flex items-center gap-2">
+                    <span className="text-sm">📁</span>
+                    <span>{cleanDisplayPath(outputDir) || 'ยังไม่ได้กำหนด'}</span>
+                  </div>
+                </div>
+
+                {/* Quick 1-Click Presets */}
+                <div className="pt-2 border-t border-[#242424]">
+                  <span className="text-[11px] font-bold text-[#a7a7a7] block mb-2">หรือเลือกตำแหน่งโฟลเดอร์แนะนำ (Quick 1-Click):</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('~/Music/DJMate_Music')}
+                      className="px-3 py-2 rounded-xl bg-[#18181c] hover:bg-[#222228] text-zinc-200 hover:text-white text-xs font-medium border border-white/5 transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>🍏</span>
+                      <span>~/Music/DJMate_Music (โฟลเดอร์เพลง Mac)</span>
+                    </button>
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('downloads')}
+                      className="px-3 py-2 rounded-xl bg-[#18181c] hover:bg-[#222228] text-zinc-200 hover:text-white text-xs font-medium border border-white/5 transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>📁</span>
+                      <span>downloads (โฟลเดอร์โปรเจกต์)</span>
+                    </button>
+                    <button
+                      onClick={() => handleSaveCustomOutputDir('~/Desktop/DJ_Set')}
+                      className="px-3 py-2 rounded-xl bg-[#18181c] hover:bg-[#222228] text-zinc-200 hover:text-white text-xs font-medium border border-white/5 transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>🖥️</span>
+                      <span>~/Desktop/DJ_Set (หน้าเดสก์ท็อป)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Manual Path Entry (For Advanced Users) */}
+                <details className="pt-1 text-xs text-[#777777] cursor-pointer">
+                  <summary className="hover:text-zinc-300 transition select-none">⚙️ สำหรับผู้ที่ต้องการพิมพ์หรือวาง Path เองด้วยตนเอง</summary>
+                  <div className="mt-2.5 flex items-center gap-2">
                     <input
                       type="text"
                       value={settingsPathInput}
                       onChange={(e) => setSettingsPathInput(e.target.value)}
-                      placeholder="เช่น C:\Music\DJMate หรือ /Users/name/Music/DJMate..."
-                      className="flex-1 bg-[#0c0c0f] text-white text-xs px-3.5 py-2.5 rounded-xl border border-[#333333] focus:border-[#1DB954] focus:outline-none font-mono transition"
+                      placeholder="เช่น C:\Music\DJMate หรือ /Users/name/Music..."
+                      className="flex-1 bg-[#0c0c0f] text-white text-xs px-3.5 py-2 rounded-xl border border-[#333333] focus:border-[#1DB954] focus:outline-none font-mono"
                     />
                     <button
                       onClick={() => handleSaveCustomOutputDir()}
-                      className="px-4 py-2.5 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold text-xs shadow transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                      className="px-3.5 py-2 rounded-xl bg-[#282828] hover:bg-[#333333] text-white font-bold text-xs border border-white/10 transition"
                     >
-                      <span>💾</span>
-                      <span>บันทึก</span>
+                      💾 บันทึก
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#a7a7a7] mt-1.5">
-                    * สามารถพิมพ์หรือ Paste ที่อยู่โฟลเดอร์บนเครื่อง Mac / Windows ได้โดยตรง
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2.5 pt-1">
-                  <button
-                    onClick={handleBrowseDir}
-                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#2e2e2e] text-white text-xs font-semibold border border-[#3e3e3e] transition flex items-center gap-2"
-                  >
-                    <span>📁</span>
-                    <span>เปิดหน้าต่างเลือกโฟลเดอร์ (Browse OS Dialog)</span>
-                  </button>
-
-                  <button
-                    onClick={handleOpenFolder}
-                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#2e2e2e] text-zinc-300 hover:text-white text-xs font-semibold border border-[#3e3e3e] transition flex items-center gap-2"
-                  >
-                    <span>📂</span>
-                    <span>เปิดโฟลเดอร์ใน Finder / Explorer</span>
-                  </button>
-                </div>
-
-                {/* Quick Presets */}
-                <div className="pt-2 border-t border-[#242424]">
-                  <span className="text-[11px] font-bold text-[#a7a7a7] block mb-2">ตำแหน่งโฟลเดอร์แนะนำ (Quick Presets):</span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => handleSaveCustomOutputDir('~/Music/DJMate_Music')}
-                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
-                    >
-                      🍏 ~/Music/DJMate_Music (Mac Standard)
-                    </button>
-                    <button
-                      onClick={() => handleSaveCustomOutputDir('downloads')}
-                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
-                    >
-                      📁 Project Downloads
-                    </button>
-                    <button
-                      onClick={() => handleSaveCustomOutputDir('~/Desktop/DJ_Set')}
-                      className="px-3 py-1.5 rounded-lg bg-[#1c1c22] hover:bg-[#242428] text-zinc-300 hover:text-white text-xs font-mono border border-white/5 transition"
-                    >
-                      🖥️ ~/Desktop/DJ_Set
-                    </button>
-                  </div>
-                </div>
+                </details>
               </div>
             )}
 

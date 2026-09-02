@@ -351,7 +351,23 @@ fn open_folder(path: Option<String>, playlist_name: Option<String>, playlistName
 
 #[tauri::command]
 async fn browse_folder() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(|| run_bridge("browse_folder", json!({})))
+    let dialog = rfd::AsyncFileDialog::new()
+        .set_title("เลือกโฟลเดอร์สำหรับจัดเก็บเพลง DJMate");
+
+    if let Some(folder) = dialog.pick_folder().await {
+        let mut path_str = folder.path().to_string_lossy().to_string();
+        if path_str.starts_with(r"\\?\") {
+            path_str = path_str[4..].to_string();
+        }
+        let res = tauri::async_runtime::spawn_blocking(move || {
+            run_bridge("set_output_dir", json!({ "path": &path_str }))
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        return Ok(res);
+    }
+
+    tauri::async_runtime::spawn_blocking(|| run_bridge("get_output_dir", json!({})))
         .await
         .map_err(|e| e.to_string())?
 }
