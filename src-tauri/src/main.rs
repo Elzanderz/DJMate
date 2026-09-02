@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    spotify_dj_converter_lib::run();
+    djmate_lib::run();
 }
