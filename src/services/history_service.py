@@ -119,22 +119,21 @@ class HistoryService:
         return tracks
 
     @classmethod
-    def extract_cover(cls, fp: str, artist: str = '', title: str = '') -> str:
+    def extract_cover(cls, fp: str, artist: str = '', title: str = '', fetch_online: bool = False) -> str:
         """
         Extracts album artwork from embedded ID3/APIC tags (rejecting non-square waveform banners),
-        or fetches official artwork from iTunes.
+        or fetches official artwork from iTunes only if fetch_online is True.
         """
         if fp and os.path.exists(fp):
             ext = os.path.splitext(fp)[1].lower()
             try:
-                if ext == '.mp3':
+                if ext in ('.mp3', '.wav', '.aiff', '.aif'):
                     from mutagen.mp3 import MP3
                     audio = MP3(fp)
                     if audio.tags:
                         for k in audio.tags.keys():
                             if k.startswith('APIC'):
                                 raw_b = audio.tags[k].data
-                                # Reject 1500x250 or 500x83 waveform banners
                                 from PIL import Image
                                 import io
                                 try:
@@ -158,7 +157,10 @@ class HistoryService:
             except Exception:
                 pass
 
-        # Fallback to iTunes API search (clean DJ remix/edit terms)
+        if not fetch_online:
+            return ""
+
+        # Fallback to iTunes API search only if explicitly requested
         import re
         clean_artist = artist.strip() if artist and artist.lower() not in ('unknown artist', 'unknown', 'various artists', 'none') else ''
         clean_title = title.strip()

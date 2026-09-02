@@ -480,10 +480,17 @@ async fn get_history() -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn sync_library() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(|| run_bridge("sync_library", json!({})))
-        .await
-        .map_err(|e| e.to_string())?
+async fn sync_library(path: Option<String>) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let payload = if let Some(p) = path {
+            json!({ "path": p })
+        } else {
+            json!({})
+        };
+        run_bridge("sync_library", payload)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

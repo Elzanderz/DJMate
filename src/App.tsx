@@ -2612,7 +2612,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         setOutputDir(cleaned);
         setSettingsPathInput(cleaned);
         showToast(`เลือกโฟลเดอร์สำเร็จ: ${cleaned}`, 'success');
-        refreshLibrary();
+
+        // Immediately sync the newly selected folder and update Library UI
+        try {
+          const synced: any = await invokeBackend('sync_library', { path: cleaned });
+          const list = Array.isArray(synced) ? synced : (Array.isArray(synced?.result) ? synced.result : null);
+          if (Array.isArray(list)) {
+            setLibraryTracks(list);
+            showToast(`✓ ซิงค์เพลงในคลังสำเร็จ พบทั้งหมด ${list.length} เพลง`, 'success');
+          } else {
+            await refreshLibrary();
+          }
+        } catch (err) {
+          await refreshLibrary();
+        }
       }
     } catch (e: any) {
       showToast('ไม่สามารถเลือกโฟลเดอร์ได้: ' + e, 'error');
