@@ -2,6 +2,12 @@
 import sys
 import os
 import json
+import subprocess
+import re
+import base64
+import string
+import ctypes
+from concurrent.futures import ThreadPoolExecutor
 
 # UTF-8 Environment Configuration
 os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -28,9 +34,6 @@ from src.services.cleaner_service import CleanerService
 from src.services.activity_service import ActivityService
 from src.services.mashup_service import MashupService
 from src.services.shazam_service import ShazamService
-import subprocess
-import re
-import base64
 
 def handle_command(cmd_name: str, payload: dict) -> dict:
     spotify_service = SpotifyService()
@@ -135,12 +138,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         tracks = HistoryService.mark_existing_tracks(tracks)
         return {'result': tracks}
 
-    elif cmd_name == 'scan_youtube_shazam':
-        url = payload.get('url', '').strip()
-        from src.services.youtube_mixtape_service import YouTubeMixtapeService
-        tracks = YouTubeMixtapeService.extract_mixtape_tracks(url)
-        return {'result': tracks}
-
     elif cmd_name == 'generate_ai_playlist':
         prompt = str(payload.get('prompt') or '').strip()
         count = int(payload.get('count') or 15)
@@ -149,19 +146,16 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         provider = str(payload.get('provider') or 'gemini').strip().lower()
         languages = payload.get('languages') or ['thai', 'english']
         mixtape_mode = str(payload.get('mixtape_mode') or 'peak_climb')
-        from src.services.ai_curator_service import AICuratorService
         result = AICuratorService.generate_playlist(prompt, count=count, api_key=api_key, provider=provider, languages=languages, mixtape_mode=mixtape_mode)
         return {'result': result}
 
     elif cmd_name == 'batch_update_tracks':
-        from src.services.history_service import HistoryService
         filepaths = payload.get('filepaths', [])
         updated_fields = payload.get('updated_fields', {})
         ok = HistoryService.batch_update_tracks(filepaths, updated_fields)
         return {'result': ok}
 
     elif cmd_name == 'batch_delete_tracks':
-        from src.services.history_service import HistoryService
         filepaths = payload.get('filepaths', [])
         track_ids = payload.get('track_ids', [])
         delete_files = payload.get('delete_files', True)
@@ -169,8 +163,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': ok}
 
     elif cmd_name == 'get_removable_drives':
-        import string
-        import ctypes
         drives = []
         if sys.platform == 'win32':
             bitmask = ctypes.windll.kernel32.GetLogicalDrives()
@@ -237,47 +229,37 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': res}
 
     elif cmd_name == 'get_gig_crates':
-        from src.services.dj_crate_service import DJCrateService
-        from src.services.history_service import HistoryService
         tracks = payload.get('tracks') or HistoryService.get_all()
         crates = DJCrateService.auto_classify_library(tracks)
         return {'result': crates}
 
     elif cmd_name == 'build_gig_storage':
-        from src.services.dj_crate_service import DJCrateService
-        from src.services.history_service import HistoryService
         tracks = payload.get('tracks') or HistoryService.get_all()
         target_dir = payload.get('target_dir') or output_dir
         res = DJCrateService.build_dj_storage_profiles(tracks, target_dir)
         return {'result': res}
 
     elif cmd_name == 'scan_duplicates':
-        from src.services.cleaner_service import CleanerService
-        from src.services.history_service import HistoryService
         tracks = payload.get('tracks') or HistoryService.get_all()
         res = CleanerService.scan_duplicates(tracks)
         return {'result': res}
 
     elif cmd_name == 'clean_duplicates_batch':
-        from src.services.cleaner_service import CleanerService
         filepaths = payload.get('filepaths', [])
         res = CleanerService.clean_duplicates_batch(filepaths)
         return {'result': res}
 
     elif cmd_name == 'redownload_studio_master':
-        from src.services.cleaner_service import CleanerService
         filepath = payload.get('filepath', '')
         res = CleanerService.redownload_studio_master(filepath)
         return {'result': res}
 
     elif cmd_name == 'get_activities':
-        from src.services.activity_service import ActivityService
         limit = payload.get('limit', 200)
         res = ActivityService.get_activities(limit=limit)
         return {'result': res}
 
     elif cmd_name == 'log_activity':
-        from src.services.activity_service import ActivityService
         cat = payload.get('category', 'general')
         title = payload.get('title', '')
         desc = payload.get('description', '')
@@ -286,13 +268,10 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': res}
 
     elif cmd_name == 'clear_activities':
-        from src.services.activity_service import ActivityService
         res = ActivityService.clear_activities()
         return {'result': res}
 
     elif cmd_name == 'find_mashup_matches':
-        from src.services.mashup_service import MashupService
-        from src.services.history_service import HistoryService
         tracks = payload.get('tracks') or HistoryService.get_all()
         min_score = payload.get('min_score', 80)
         limit = payload.get('limit', 50)
@@ -301,7 +280,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
 
     elif cmd_name == 'search_spotify_tracks':
         queries = payload.get('queries', [])
-        from concurrent.futures import ThreadPoolExecutor
 
         def match_single_query(item):
             idx, q = item
@@ -341,26 +319,22 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         with ThreadPoolExecutor(max_workers=12) as executor:
             results = list(executor.map(match_single_query, enumerate(queries)))
 
-        from src.services.history_service import HistoryService
         results = HistoryService.mark_existing_tracks(results)
         return {'result': results}
 
     elif cmd_name == 'search_music_unified':
         query = payload.get('query', '')
-        from src.services.music_search_service import MusicSearchService
         res = MusicSearchService.search_unified(query, base_dir=output_dir)
         return {'result': res}
 
     elif cmd_name == 'search_local_folder':
         query = payload.get('query', '')
-        from src.services.music_search_service import MusicSearchService
         res = MusicSearchService.search_local_library(query, base_dir=output_dir)
         return {'result': res}
 
     elif cmd_name == 'search_online_tracks':
         query = payload.get('query', '')
         limit = int(payload.get('limit', 10))
-        from src.services.music_search_service import MusicSearchService
         res = MusicSearchService.search_online_tracks(query, limit_per_source=limit, check_local=True)
         return {'result': res}
 
@@ -394,7 +368,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': sorted_tracks}
 
     elif cmd_name == 'export_smart_mixtape_package':
-        from src.services.dj_exporters import DJExportersService
         tracks = payload.get('tracks', [])
         title = payload.get('title', 'Smart_Mixtape_DJ_Set')
         copy_audio = payload.get('copy_audio', False)
@@ -402,19 +375,16 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': res}
 
     elif cmd_name == 'scan_youtube_shazam':
-        from src.services.shazam_service import ShazamService
         url = payload.get('url', '')
         tracks = ShazamService.scan_youtube_audio(url)
         return {'result': tracks}
 
     elif cmd_name in ('sync_library', 'get_history'):
-        from src.services.history_service import HistoryService
         rescan = payload.get('rescan', True) if cmd_name == 'get_history' else True
         history = HistoryService.sync_downloads_folder(output_dir) if rescan else HistoryService.get_all()
         return {'result': history}
 
     elif cmd_name == 'delete_history_track':
-        from src.services.history_service import HistoryService
         filepath = payload.get('filepath', '')
         track_id = payload.get('track_id') or payload.get('id')
         delete_file = payload.get('delete_file', False)
@@ -426,7 +396,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         ffmpeg_exe = DownloaderService.get_ffmpeg_path()
         converted_count = 0
         if ffmpeg_exe and os.path.exists(target_dir):
-            import subprocess
             for root, _, files in os.walk(target_dir):
                 for f in files:
                     if f.lower().endswith(('.mp4', '.webm', '.opus', '.mkv')):
@@ -461,7 +430,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         title = payload.get('title', 'Tracklist')
         format_mode = payload.get('format_mode', 'youtube')
         target_dir = payload.get('target_dir') or output_dir
-        import re
         clean_title = re.sub(r'[\\/*?:"<>|]', '_', title).strip() or 'Tracklist'
         file_path = os.path.join(target_dir, f"{clean_title}_tracklist.txt")
         saved = RekordboxService.export_tracklist_txt(tracks, file_path, playlist_name=title, format_mode=format_mode)
@@ -525,7 +493,6 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
                 return {'result': ''}
             filepath = candidate
 
-        import base64
         ext = os.path.splitext(filepath)[1].lower().replace('.', '')
         mime = 'audio/mpeg' if ext == 'mp3' else f'audio/{ext}'
         try:
