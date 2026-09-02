@@ -261,6 +261,8 @@ export default function App() {
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
   const [isRedownloadingStudio, setIsRedownloadingStudio] = useState<string | null>(null);
+  const [isBatchRedownloading, setIsBatchRedownloading] = useState(false);
+  const [batchUpgradeProgress, setBatchUpgradeProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Custom Styled DJ Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -634,6 +636,38 @@ export default function App() {
     } finally {
       setIsRedownloadingStudio(null);
     }
+  };
+
+  const handleBatchRedownloadStudio = async (tracksToUpgrade: any[]) => {
+    if (!tracksToUpgrade || tracksToUpgrade.length === 0) return;
+    setIsBatchRedownloading(true);
+    setBatchUpgradeProgress({ current: 0, total: tracksToUpgrade.length });
+    showToast(`เริ่มอัปเกรดทั้งหมด ${tracksToUpgrade.length} เพลงเป็น Studio Master...`, 'info');
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < tracksToUpgrade.length; i++) {
+      const t = tracksToUpgrade[i];
+      setBatchUpgradeProgress({ current: i + 1, total: tracksToUpgrade.length });
+      if (!t.filepath) continue;
+      try {
+        const res: any = await invokeBackend('redownload_studio_master', { filepath: t.filepath });
+        if (res && res.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    setIsBatchRedownloading(false);
+    setBatchUpgradeProgress(null);
+    showToast(`✓ อัปเกรดเสร็จสิ้น! สำเร็จ ${successCount} เพลง (ไม่สำเร็จ ${failCount})`, 'success');
+    refreshLibrary();
+    handleOpenCleanerModal();
   };
 
   const fetchActivities = async () => {
@@ -6221,6 +6255,38 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                       </p>
                     </div>
 
+                    {/* Batch Action Bar for Tab 2 */}
+                    {duplicateData.mv_suspect_tracks && duplicateData.mv_suspect_tracks.length > 0 && (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-teal-950/30 to-black border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+                        <div className="space-y-0.5 text-center sm:text-left">
+                          <h4 className="text-xs font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+                            <span>⚡</span>
+                            <span>อัปเกรดเป็น Studio Master ทั้งหมดพร้อมกัน</span>
+                          </h4>
+                          <p className="text-[11px] text-zinc-400">
+                            ตรวจพบ <strong>{duplicateData.mv_suspect_tracks.length}</strong> เพลงที่มาจาก MV
+                          </p>
+                        </div>
+                        <button
+                          disabled={isBatchRedownloading || isRedownloadingStudio !== null}
+                          onClick={() => handleBatchRedownloadStudio(duplicateData.mv_suspect_tracks)}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-950/50 transition active:scale-95 flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isBatchRedownloading ? (
+                            <>
+                              <span className="animate-spin text-sm">↻</span>
+                              <span>กำลังอัปเกรด {batchUpgradeProgress?.current} / {batchUpgradeProgress?.total}...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>⚡</span>
+                              <span>โหลดแทนที่ทั้งหมด ({duplicateData.mv_suspect_tracks.length} เพลง)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
                     {(!duplicateData.mv_suspect_tracks || duplicateData.mv_suspect_tracks.length === 0) ? (
                       <div className="p-10 text-center text-zinc-500 text-xs">
                         ✨ สะอาดมาก! ไม่พบไฟล์เพลงที่มาจาก Music Video ในเครื่อง
@@ -6228,7 +6294,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     ) : (
                       duplicateData.mv_suspect_tracks.map((t: any, idx: number) => {
                         const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
-                        const isRedownloading = isRedownloadingStudio === t.filepath;
+                        const isRedownloading = isRedownloadingStudio === t.filepath || (isBatchRedownloading && batchUpgradeProgress?.current === idx + 1);
 
                         return (
                           <div key={idx} className="p-3.5 bg-[#101013] rounded-2xl border border-rose-500/20 flex items-center justify-between gap-4">
@@ -6245,7 +6311,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button
-                                disabled={isRedownloading}
+                                disabled={isRedownloading || isBatchRedownloading}
                                 onClick={() => handleRedownloadStudio(t.filepath)}
                                 className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
                                 title="ดาวน์โหลดเวอร์ชัน Official Studio Master (320kbps) มาแทนที่ไฟล์นี้ทันที"
@@ -6263,7 +6329,39 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                 {/* TAB 3: LOW QUALITY TRACKS */}
                 {cleanerActiveTab === 'low_quality' && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {/* Batch Action Bar for Tab 3 */}
+                    {duplicateData.low_quality_tracks && duplicateData.low_quality_tracks.length > 0 && (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-sky-950/50 via-blue-950/30 to-black border border-sky-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+                        <div className="space-y-0.5 text-center sm:text-left">
+                          <h4 className="text-xs font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+                            <span>⚡</span>
+                            <span>อัปเกรดบิตเรตทั้งหมดเป็น 320kbps พร้อมกัน</span>
+                          </h4>
+                          <p className="text-[11px] text-zinc-400">
+                            ตรวจพบ <strong>{duplicateData.low_quality_tracks.length}</strong> เพลงที่มีคุณภาพบิตเรตต่ำ
+                          </p>
+                        </div>
+                        <button
+                          disabled={isBatchRedownloading || isRedownloadingStudio !== null}
+                          onClick={() => handleBatchRedownloadStudio(duplicateData.low_quality_tracks)}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-sky-950/50 transition active:scale-95 flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isBatchRedownloading ? (
+                            <>
+                              <span className="animate-spin text-sm">↻</span>
+                              <span>กำลังอัปเกรด {batchUpgradeProgress?.current} / {batchUpgradeProgress?.total}...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>⚡</span>
+                              <span>อัปเกรดทั้งหมดเป็น 320k ({duplicateData.low_quality_tracks.length} เพลง)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
                     {(!duplicateData.low_quality_tracks || duplicateData.low_quality_tracks.length === 0) ? (
                       <div className="p-10 text-center text-zinc-500 text-xs">
                         ✨ คุณภาพสมบูรณ์แบบ! เพลงทั้งหมดในคลังเป็นแบบ High Bitrate (320kbps / Lossless)
@@ -6271,7 +6369,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     ) : (
                       duplicateData.low_quality_tracks.map((t: any, idx: number) => {
                         const filename = t.filepath ? t.filepath.split(/[/\\]/).pop() : (t.title || 'Track');
-                        const isRedownloading = isRedownloadingStudio === t.filepath;
+                        const isRedownloading = isRedownloadingStudio === t.filepath || (isBatchRedownloading && batchUpgradeProgress?.current === idx + 1);
 
                         return (
                           <div key={idx} className="p-3 bg-[#101013] rounded-2xl border border-white/5 flex items-center justify-between gap-4">
@@ -6284,7 +6382,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                                 {t.bitrate_kbps} kbps ({t.size_mb} MB)
                               </span>
                               <button
-                                disabled={isRedownloading}
+                                disabled={isRedownloading || isBatchRedownloading}
                                 onClick={() => handleRedownloadStudio(t.filepath)}
                                 className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg transition disabled:opacity-50"
                               >
