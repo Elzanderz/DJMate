@@ -2554,6 +2554,18 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         (t.playlist_name && t.playlist_name.trim().toLowerCase() === libFilterPlaylist.trim().toLowerCase());
 
       return matchSearch && matchKey && matchStars && matchGenre && matchPlaylist;
+    }).sort((a, b) => {
+      if (libFilterPlaylist !== 'ALL') {
+        const getNum = (item: any) => {
+          if (item.track_number) return Number(item.track_number);
+          const fn = (item.filepath || '').split(/[/\\]/).pop() || '';
+          const m = fn.match(/^(\d+)/);
+          return m ? parseInt(m[1], 10) : 9999;
+        };
+        const diff = getNum(a) - getNum(b);
+        if (diff !== 0) return diff;
+      }
+      return 0;
     });
   }, [libraryTracks, libSearch, libFilterKey, libFilterStars, libFilterGenre, libFilterPlaylist]);
 

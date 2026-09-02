@@ -228,7 +228,24 @@ class DownloaderService:
             save_dir = output_dir
 
         os.makedirs(save_dir, exist_ok=True)
-        base_name = f'{artist} - {title}' if artist and not title.lower().startswith(artist.lower()) else title
+        track_num = track_info.get('track_number') or track_info.get('index')
+        num_prefix = ""
+        if track_num:
+            try:
+                num_val = int(track_num)
+                num_prefix = f"{num_val:02d}. "
+            except Exception:
+                num_prefix = f"{track_num}. "
+
+        raw_title = title
+        # Strip duplicate leading numbers from title if already present
+        raw_title = re.sub(r'^\d+\s*[\.\-]\s*', '', raw_title).strip()
+        
+        if artist and not raw_title.lower().startswith(artist.lower()):
+            base_name = f"{num_prefix}{artist} - {raw_title}"
+        else:
+            base_name = f"{num_prefix}{raw_title}"
+
         clean_base = cls.sanitize_filename(base_name)
         target_file = os.path.join(save_dir, f'{clean_base}.{audio_format}')
 
