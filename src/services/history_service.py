@@ -121,8 +121,8 @@ class HistoryService:
     @classmethod
     def extract_cover(cls, fp: str, artist: str = '', title: str = '', fetch_online: bool = False) -> str:
         """
-        Extracts album artwork from embedded ID3/APIC tags (rejecting non-square waveform banners),
-        or fetches official artwork from iTunes only if fetch_online is True.
+        Extracts album artwork from embedded ID3/APIC tags, folder images (cover.jpg/folder.jpg),
+        or fetches official artwork from iTunes if fetch_online is True.
         """
         if fp and os.path.exists(fp):
             ext = os.path.splitext(fp)[1].lower()
@@ -134,15 +134,6 @@ class HistoryService:
                         for k in audio.tags.keys():
                             if k.startswith('APIC'):
                                 raw_b = audio.tags[k].data
-                                from PIL import Image
-                                import io
-                                try:
-                                    im = Image.open(io.BytesIO(raw_b))
-                                    w, h = im.size
-                                    if w / h > 1.35 or h / w > 1.35:
-                                        continue
-                                except Exception:
-                                    pass
                                 return cls._to_thumbnail_data_url(raw_b)
                 elif ext in ('.m4a', '.mp4', '.aac'):
                     from mutagen.mp4 import MP4
@@ -154,6 +145,17 @@ class HistoryService:
                     audio = FLAC(fp)
                     if audio.pictures:
                         return cls._to_thumbnail_data_url(audio.pictures[0].data)
+            except Exception:
+                pass
+
+            # Check folder-level cover images (cover.jpg, folder.jpg, front.png, etc.)
+            try:
+                parent = os.path.dirname(os.path.abspath(fp))
+                for cand_name in ('cover.jpg', 'folder.jpg', 'cover.png', 'folder.png', 'front.jpg', 'album.jpg', 'front.png', 'album.png'):
+                    cand_path = os.path.join(parent, cand_name)
+                    if os.path.exists(cand_path):
+                        with open(cand_path, 'rb') as cf:
+                            return cls._to_thumbnail_data_url(cf.read())
             except Exception:
                 pass
 
@@ -179,6 +181,16 @@ class HistoryService:
 
     @staticmethod
     def _to_thumbnail_data_url(raw_bytes: bytes) -> str:
+        if not raw_bytes:
+            return ""
+        mime = 'image/jpeg'
+        if raw_bytes.startswith(b'\x89PNG'):
+            mime = 'image/png'
+        elif raw_bytes.startswith(b'GIF8'):
+            mime = 'image/gif'
+        elif raw_bytes.startswith(b'RIFF') and b'WEBP' in raw_bytes[:16]:
+            mime = 'image/webp'
+
         try:
             import io
             import base64
@@ -186,14 +198,14 @@ class HistoryService:
             im = Image.open(io.BytesIO(raw_bytes))
             im.thumbnail((160, 160))
             buf = io.BytesIO()
-            im.convert('RGB').save(buf, format='JPEG', quality=80)
+            im.convert('RGB').save(buf, format='JPEG', quality=85)
             b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             return f"data:image/jpeg;base64,{b64}"
         except Exception:
             try:
                 import base64
                 b64 = base64.b64encode(raw_bytes).decode('utf-8')
-                return f"data:image/jpeg;base64,{b64}"
+                return f"data:{mime};base64,{b64}"
             except Exception:
                 return ""
 
