@@ -92,6 +92,105 @@ const CAMELOT_WHEEL = [
   { key: '12A', musical: 'C# Min', rel: '12B', num: 12, type: 'A', color: '#34d399' },
 ];
 
+export const getCamelotColor = (keyStr?: string): { hex: string; bg: string; border: string; text: string; name: string } => {
+  const k = (keyStr || '8A').trim().toUpperCase();
+  const found = CAMELOT_WHEEL.find((w) => w.key === k);
+  const hex = found?.color || '#fb923c';
+  const name = found?.musical || 'A Min';
+  return {
+    hex,
+    bg: `${hex}22`,
+    border: `${hex}55`,
+    text: hex,
+    name,
+  };
+};
+
+export const getHarmonicMatchInfo = (currentKey?: string, targetKey?: string) => {
+  if (!currentKey || !targetKey) return null;
+  const k1 = currentKey.trim().toUpperCase();
+  const k2 = targetKey.trim().toUpperCase();
+  if (!k1 || !k2 || k1 === '--' || k2 === '--') return null;
+
+  const num1 = parseInt(k1.slice(0, -1)) || 0;
+  const let1 = k1.slice(-1);
+  const num2 = parseInt(k2.slice(0, -1)) || 0;
+  const let2 = k2.slice(-1);
+
+  if (!num1 || !num2) return null;
+
+  const diffNum = Math.abs(num1 - num2);
+  const diffWheel = Math.min(diffNum, 12 - diffNum);
+  const sameLetter = let1 === let2;
+
+  if (k1 === k2) {
+    return { type: 'exact', badge: '🟢 MATCH', label: 'Perfect Harmonic Match (100%)', color: '#10b981', bg: '#10b98125', border: '#10b98160' };
+  }
+  if (sameLetter && diffWheel === 1) {
+    const isUp = (num2 - num1 === 1) || (num1 === 12 && num2 === 1);
+    return { type: 'adjacent', badge: isUp ? '🔵 +1 LIFT' : '🔵 -1 STEP', label: isUp ? '+1 Energy Lift (95%)' : '-1 Harmonic Step (95%)', color: '#38bdf8', bg: '#38bdf825', border: '#38bdf860' };
+  }
+  if (!sameLetter && diffWheel === 0) {
+    return { type: 'relative', badge: '🟣 REL', label: `Relative ${let2 === 'B' ? 'Major' : 'Minor'} Mood Switch (90%)`, color: '#c084fc', bg: '#c084fc25', border: '#c084fc60' };
+  }
+  if (sameLetter && diffWheel === 2) {
+    return { type: 'boost', badge: '⚡ +2 BOOST', label: '+2 Power Energy Boost (85%)', color: '#f59e0b', bg: '#f59e0b25', border: '#f59e0b60' };
+  }
+  return null;
+};
+
+export const CamelotBadge: React.FC<{
+  camelotKey?: string;
+  keyName?: string;
+  currentPlayingKey?: string;
+  onClick?: () => void;
+  showHarmonicTag?: boolean;
+}> = ({ camelotKey, keyName, currentPlayingKey, onClick, showHarmonicTag = true }) => {
+  const k = (camelotKey || '--').trim().toUpperCase();
+  if (k === '--') {
+    return <span className="text-xs font-mono font-bold text-zinc-500">—</span>;
+  }
+
+  const colorInfo = getCamelotColor(k);
+  const matchInfo = currentPlayingKey && currentPlayingKey !== k ? getHarmonicMatchInfo(currentPlayingKey, k) : null;
+  const isExactCurrent = currentPlayingKey && currentPlayingKey.toUpperCase() === k;
+
+  return (
+    <div className="inline-flex items-center gap-1 select-none">
+      <span
+        onClick={onClick}
+        style={{
+          backgroundColor: colorInfo.bg,
+          borderColor: isExactCurrent ? '#10b981' : colorInfo.border,
+          color: colorInfo.text,
+          boxShadow: isExactCurrent ? `0 0 10px ${colorInfo.hex}60` : undefined,
+        }}
+        className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 ${
+          onClick ? 'hover:shadow-md' : ''
+        }`}
+        title={`Camelot Key: ${k}${keyName ? ` (${keyName})` : ` (${colorInfo.name})`} • คลิกเพื่อเปิด Camelot Wheel`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorInfo.hex }} />
+        <span>{k}</span>
+      </span>
+
+      {showHarmonicTag && matchInfo && (
+        <span
+          style={{
+            backgroundColor: matchInfo.bg,
+            borderColor: matchInfo.border,
+            color: matchInfo.color,
+          }}
+          className="text-[9px] font-bold font-mono px-1 py-0.5 rounded border flex items-center gap-0.5 shadow-sm animate-pulse whitespace-nowrap"
+          title={matchInfo.label}
+        >
+          {matchInfo.badge}
+        </span>
+      )}
+    </div>
+  );
+};
+
 // Harmonic Transition Engine & Set Score Analysis
 interface TransitionInfo {
   score: number;
@@ -694,6 +793,11 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     return { label, barStr: `Bar ${barAtTime}.${beatInBarAtTime}`, phraseStr: `Phrase ${phraseAtTime}` };
   };
 
+  const introSec = track?.cues?.find((c: any) => c.name === 'Intro')?.start || 0;
+  const dropSec = track?.cues?.find((c: any) => c.name === 'Drop')?.start || (totalDuration * 0.45);
+  const outroSec = track?.cues?.find((c: any) => c.name === 'Outro')?.start || mixOutSec;
+  const dropPct = Math.min(95, Math.max(10, (dropSec / totalDuration) * 100));
+
   return (
     <div
       ref={barRef}
@@ -759,7 +863,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       <div className="absolute inset-0 pointer-events-none">
         {/* Intro Mix-In Marker (🟢 In) */}
         <div className="absolute left-[1%] top-0 flex items-center gap-0.5" title="Mix-In (Intro 32-Beat)">
-          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-b-sm shadow-[0_0_4px_#34d399]" />
+          <span className="w-2 h-2 bg-emerald-400 rounded-b-sm shadow-[0_0_6px_#34d399]" />
         </div>
 
         {/* Vocals Marker (🎤 Vocals) */}
@@ -768,13 +872,13 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         </div>
 
         {/* Drop Marker (⚡ Drop) */}
-        <div className="absolute left-[48%] top-0" title="Main Drop / Bass">
-          <span className="w-1.5 h-1.5 bg-sky-400 rounded-b-sm shadow-[0_0_4px_#38bdf8]" />
+        <div style={{ left: `${dropPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Main Drop / Bass (${Math.floor(dropSec/60)}:${Math.floor(dropSec%60)<10?'0':''}${Math.floor(dropSec%60)})`}>
+          <span className="w-2 h-2 bg-sky-400 rounded-b-sm shadow-[0_0_6px_#38bdf8]" />
         </div>
 
         {/* Outro Mix-Out Marker (🔴 Out) */}
-        <div style={{ left: `${mixOutPct}%` }} className="absolute top-0 flex items-center gap-0.5" title="Mix-Out (Outro)">
-          <span className="w-1.5 h-1.5 bg-rose-500 rounded-b-sm shadow-[0_0_4px_#f43f5e]" />
+        <div style={{ left: `${mixOutPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Mix-Out (Outro ${Math.floor(outroSec/60)}:${Math.floor(outroSec%60)<10?'0':''}${Math.floor(outroSec%60)})`}>
+          <span className="w-2 h-2 bg-rose-500 rounded-b-sm shadow-[0_0_6px_#f43f5e]" />
         </div>
       </div>
 
@@ -3039,16 +3143,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                             </span>
                           </div>
 
-                          <div className="col-span-1 text-center">
-                            <span
+                          <div className="col-span-1 text-center flex justify-center">
+                            <CamelotBadge
+                              camelotKey={t.camelot}
+                              keyName={t.key_name}
+                              currentPlayingKey={activeTrack?.camelot}
                               onClick={() => {
                                 setSelectedKeyForWheel(t.camelot || '8A');
                                 setShowCamelotModal(true);
                               }}
-                              className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[#202026] text-zinc-200 border border-white/5 cursor-pointer hover:border-indigo-400 transition"
-                            >
-                              {t.camelot || '--'}
-                            </span>
+                            />
                           </div>
 
                           <div className="col-span-1 text-center">
@@ -3791,16 +3895,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                           </span>
                         </div>
 
-                        <div className="col-span-1 text-center">
-                          <span
+                        <div className="col-span-1 text-center flex justify-center">
+                          <CamelotBadge
+                            camelotKey={t.camelot}
+                            keyName={t.key_name}
+                            currentPlayingKey={activeTrack?.camelot}
                             onClick={() => {
                               setSelectedKeyForWheel(t.camelot || '8A');
                               setShowCamelotModal(true);
                             }}
-                            className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[#202026] text-zinc-200 border border-white/5 cursor-pointer hover:border-indigo-400 transition"
-                          >
-                              {t.camelot || '--'}
-                          </span>
+                          />
                         </div>
 
                         <div className="col-span-1 text-center">
@@ -4159,16 +4263,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                                 <span className="text-[11px] text-zinc-400 font-medium truncate mt-0.5">{t.artist || 'Unknown Artist'}</span>
                               </div>
 
-                              <div className="col-span-1 text-center">
-                                <span
+                              <div className="col-span-1 text-center flex justify-center">
+                                <CamelotBadge
+                                  camelotKey={t.camelot}
+                                  keyName={t.key_name}
+                                  currentPlayingKey={activeTrack?.camelot}
                                   onClick={() => {
                                     setSelectedKeyForWheel(t.camelot || '8A');
                                     setShowCamelotModal(true);
                                   }}
-                                  className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[#202026] text-zinc-200 border border-white/5 cursor-pointer hover:border-indigo-400 transition"
-                                >
-                                  {t.camelot || '--'}
-                                </span>
+                                />
                               </div>
 
                               <div className="col-span-1 text-center">
@@ -4402,16 +4506,16 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                                 </span>
                               </div>
 
-                              <div className="col-span-1 text-center">
-                                <span
+                              <div className="col-span-1 text-center flex justify-center">
+                                <CamelotBadge
+                                  camelotKey={t.camelot}
+                                  keyName={t.key_name}
+                                  currentPlayingKey={activeTrack?.camelot}
                                   onClick={() => {
                                     setSelectedKeyForWheel(t.camelot || '8A');
                                     setShowCamelotModal(true);
                                   }}
-                                  className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[#202026] text-zinc-200 border border-white/5 cursor-pointer hover:border-emerald-400 transition"
-                                >
-                                  {t.camelot || '--'}
-                                </span>
+                                />
                               </div>
 
                               <div className="col-span-1 text-center">
@@ -4621,17 +4725,26 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         onContextMenu={(e) => handleOpenContextMenu(e, activeTrack, 'player')}
         className="fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0c]/98 backdrop-blur-2xl border-t border-white/10 px-5 flex items-center justify-between text-white z-50 shadow-2xl"
       >
-        {/* 1. Left: Cover Art + Title / Artist / Label (Clickable to expand) */}
+        {/* 1. Left: Cover Art + Title / Artist / Spectrum (Clickable to expand) */}
         <div
           onClick={() => setShowExpandedPlayer(true)}
-          className="flex items-center gap-3 w-[260px] min-w-[210px] flex-shrink-0 cursor-pointer group hover:opacity-95 transition"
-          title="Click to open Fullscreen Apple Music / Spotify DJ Player"
+          className="flex items-center gap-3 w-[270px] min-w-[220px] flex-shrink-0 cursor-pointer group hover:opacity-95 transition"
+          title="Click to open Fullscreen Pro DJ Player"
         >
-          <div className="w-11 h-11 rounded-md bg-[#16161a] overflow-hidden flex-shrink-0 shadow border border-white/10 relative">
+          <div className="w-11 h-11 rounded-xl bg-[#16161a] overflow-hidden flex-shrink-0 shadow-lg border border-white/10 relative">
             {activeTrack?.cover_url ? (
               <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+            )}
+            {/* Live Audio Spectrum Equalizer Animation */}
+            {isPlaying && (
+              <div className="absolute inset-0 bg-black/50 flex items-end justify-center gap-0.5 pb-1 px-1 pointer-events-none">
+                <span className="w-1 bg-emerald-400 rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
+                <span className="w-1 bg-teal-300 rounded-t animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-5" />
+                <span className="w-1 bg-cyan-400 rounded-t animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-4" />
+                <span className="w-1 bg-sky-300 rounded-t animate-[bounce_0.5s_ease-in-out_infinite_0.15s] h-6" />
+              </div>
             )}
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
               <span className="text-[10px] font-bold text-white">⛶ EXPAND</span>
@@ -4639,37 +4752,75 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-emerald-400 transition">{activeTrack?.title || 'No track playing'}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                DECK A
+              </span>
+              {isAutoDjEnabled && <span className="text-[9px] font-bold text-emerald-400 font-mono">● AUTO-DJ</span>}
+            </div>
+            <p className="text-xs font-bold text-white truncate leading-tight mt-0.5 group-hover:text-emerald-400 transition">{activeTrack?.title || 'No track playing'}</p>
             <p className="text-[11px] text-zinc-400 truncate mt-0.5 leading-tight">{activeTrack?.artist || 'Select a track to start'}</p>
-            <p className="text-[10px] text-zinc-500 truncate mt-0.5 leading-tight flex items-center gap-1.5">
-              <span>{activeTrack?.label || activeTrack?.album || activeTrack?.genre || 'Beatport DJ'}</span>
-              {isAutoDjEnabled && <span className="text-[9px] font-bold text-emerald-400 font-mono">● AUTO-DJ ON</span>}
-            </p>
           </div>
         </div>
 
-        {/* 2. Metadata: Time / BPM / Key */}
+        {/* 2. Metadata: Time / BPM / Smart Camelot Glow Badge */}
         <div className="flex flex-col justify-center text-right font-mono pr-4 pl-1 flex-shrink-0 select-none">
           <div className="text-xs font-bold">
             <span className="text-white">{formatTime(currentTime)}</span>
             <span className="text-zinc-500 font-normal"> / {formatTime(duration)}</span>
           </div>
-          <div className="text-[10px] text-zinc-400 font-medium leading-tight mt-0.5">
-            {activeTrack?.bpm ? `${Math.round(activeTrack.bpm)} bpm` : '128 bpm'}
-          </div>
-          <div className="text-[10px] text-zinc-400 font-medium leading-tight">
-            {activeTrack?.key_name || activeTrack?.camelot || '8A'}
+          <div className="text-[10px] text-zinc-400 font-medium leading-tight mt-0.5 flex items-center justify-end gap-1.5">
+            <span>{activeTrack?.bpm ? `${Math.round(activeTrack.bpm)} BPM` : '128 BPM'}</span>
+            <CamelotBadge
+              camelotKey={activeTrack?.camelot || '8A'}
+              keyName={activeTrack?.key_name}
+              showHarmonicTag={false}
+              onClick={() => {
+                setSelectedKeyForWheel(activeTrack?.camelot || '8A');
+                setShowCamelotModal(true);
+              }}
+            />
           </div>
         </div>
 
-        {/* 3. Center: Beatport Symmetrical Waveform */}
-        <div className="flex-1 min-w-[200px] px-2 flex items-center">
+        {/* 3. Center: Beatport Symmetrical Waveform & Quick Cue Jumps */}
+        <div className="flex-1 min-w-[200px] px-2 flex flex-col justify-center gap-1">
           <BeatportWaveform
             currentTime={currentTime}
             duration={duration}
             onSeek={handleSeek}
             track={activeTrack}
           />
+          {activeTrack && (
+            <div className="flex items-center justify-between px-1 text-[10px] font-mono font-semibold text-zinc-500">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Intro')?.start || 0)}
+                  className="px-1.5 py-0.2 rounded bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
+                  title="Jump to Intro (0:00)"
+                >
+                  <span>🟢 IN</span>
+                </button>
+                <button
+                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Drop')?.start || (duration * 0.45))}
+                  className="px-1.5 py-0.2 rounded bg-sky-500/15 hover:bg-sky-500/30 text-sky-400 border border-sky-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
+                  title="Jump to Main Drop"
+                >
+                  <span>⚡ DROP</span>
+                </button>
+                <button
+                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Outro')?.start || Math.max(15, duration - 30))}
+                  className="px-1.5 py-0.2 rounded bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
+                  title="Jump to Outro Mix-Out"
+                >
+                  <span>🔴 OUT</span>
+                </button>
+              </div>
+              <span className="text-[9px] text-zinc-500">
+                {activeTrack.genre || 'Electronic / Dance'} • {activeTrack.label || 'DJ Studio'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 4. Right Controls: DJ Auto-Mix, Queue, Shuffle, Prev, Play, Next, Repeat, Volume */}

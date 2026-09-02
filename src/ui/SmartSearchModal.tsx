@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { CamelotBadge } from '../App';
 
 export interface SmartSearchTrack {
   id: string;
@@ -490,13 +491,15 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                           {/* DJ Badges: Camelot, BPM, Genre */}
                           <div className="hidden sm:flex items-center gap-2 shrink-0">
                             {t.camelot && (
-                              <span className="text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded">
-                                {t.camelot}
-                              </span>
+                              <CamelotBadge
+                                camelotKey={t.camelot}
+                                keyName={t.key_name}
+                                showHarmonicTag={false}
+                              />
                             )}
                             {t.bpm && (
-                              <span className="text-[10px] font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded">
-                                {t.bpm} BPM
+                              <span className="text-[10px] font-mono text-zinc-300 bg-white/5 px-2 py-0.5 rounded border border-white/5 font-semibold">
+                                {Math.round(t.bpm)} BPM
                               </span>
                             )}
                             <span className="text-[11px] text-zinc-500 font-mono">
