@@ -412,6 +412,14 @@ class HistoryService:
             except Exception as e:
                 print(f"[HistoryService] Error saving synchronized database: {e}")
 
+        # Update SQLite DB Engine in background
+        try:
+            from src.services.db_service import DBService
+            for t in updated_list:
+                DBService.upsert_track(t, target_dir)
+        except Exception:
+            pass
+
         return updated_list
 
     @classmethod
@@ -420,6 +428,17 @@ class HistoryService:
         db_file = cls.get_db_file(target_dir)
         if force_rescan:
             return cls.sync_downloads_folder(target_dir)
+        
+        # Fast SQLite Query with fallback to JSON
+        try:
+            from src.services.db_service import DBService
+            DBService.sync_from_json_if_needed(db_file, target_dir)
+            db_tracks = DBService.get_all_tracks(target_dir)
+            if db_tracks:
+                return db_tracks
+        except Exception:
+            pass
+
         try:
             with open(db_file, 'r', encoding='utf-8') as f:
                 tracks = json.load(f)
@@ -446,11 +465,23 @@ class HistoryService:
         except Exception as e:
             print(f"[HistoryService] Error saving track: {e}")
 
+        try:
+            from src.services.db_service import DBService
+            DBService.upsert_track(track)
+        except Exception:
+            pass
+
     @classmethod
     def delete_track(cls, filepath: str, delete_file: bool = True, track_id: Optional[str] = None) -> bool:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
+
+        try:
+            from src.services.db_service import DBService
+            DBService.delete_track(filepath, track_id=track_id)
+        except Exception:
+            pass
         norm_target = os.path.normpath(os.path.abspath(filepath)).lower() if filepath else ''
         
         remaining = []

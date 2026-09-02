@@ -534,7 +534,7 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     return {'error': f'Unknown command: {cmd_name}'}
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1 and sys.argv[1] != '--daemon':
         cmd = sys.argv[1]
         data = {}
         if len(sys.argv) > 2:
@@ -550,7 +550,7 @@ if __name__ == '__main__':
         resp = handle_command(cmd, data)
         print(json.dumps(resp, ensure_ascii=False))
     else:
-        # Standard input processing
+        # Continuous High-Speed IPC Daemon Mode
         for line in sys.stdin:
             line = line.strip()
             if not line:
@@ -558,9 +558,8 @@ if __name__ == '__main__':
             try:
                 req = json.loads(line)
                 cmd = req.get('cmd')
-                payload = req.get('args', {})
+                payload = req.get('payload') or req.get('args') or {}
                 resp = handle_command(cmd, payload)
                 print(json.dumps(resp, ensure_ascii=False), flush=True)
             except Exception as e:
                 print(json.dumps({'error': str(e)}), flush=True)
-            break
