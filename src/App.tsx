@@ -303,9 +303,10 @@ export default function App() {
   const handleFetchSystemHealth = async () => {
     setIsCheckingHealth(true);
     try {
-      const res = await invokeBackend('check_system_health');
+      const res: any = await invokeBackend('check_system_health');
       if (res) {
-        setSystemHealth(res);
+        const data = (res.result !== undefined && res.result !== null) ? res.result : res;
+        setSystemHealth(data);
       }
     } catch (e: any) {
       console.error(e);
@@ -771,6 +772,12 @@ export default function App() {
       libTableScrollRef.current.scrollTop = 0;
     }
   }, [libFilterPlaylist, libSearch, libFilterGenre, libFilterKey, libFilterStars]);
+
+  useEffect(() => {
+    if (showSettingsModal && settingsActiveTab === 'system') {
+      handleFetchSystemHealth();
+    }
+  }, [showSettingsModal, settingsActiveTab]);
 
   useEffect(() => {
     invokeBackend('get_output_dir').then((res) => {
