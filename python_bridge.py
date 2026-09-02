@@ -145,8 +145,9 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     elif cmd_name == 'batch_delete_tracks':
         from src.services.history_service import HistoryService
         filepaths = payload.get('filepaths', [])
-        delete_files = payload.get('delete_files', False)
-        ok = HistoryService.batch_delete_tracks(filepaths, delete_files=delete_files)
+        track_ids = payload.get('track_ids', [])
+        delete_files = payload.get('delete_files', True)
+        ok = HistoryService.batch_delete_tracks(filepaths, delete_files=delete_files, track_ids=track_ids)
         return {'result': ok}
 
     elif cmd_name == 'get_removable_drives':

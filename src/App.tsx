@@ -2222,7 +2222,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   const handleBatchDelete = (deleteFromDisk: boolean = true) => {
     const selectedTracks = selectedLibIndices.map((i) => filteredLibrary[i]).filter(Boolean);
     const filepaths = selectedTracks.map((t) => t.filepath).filter(Boolean) as string[];
-    if (filepaths.length === 0) return;
+    const trackIds = selectedTracks.map((t) => t.id).filter(Boolean) as string[];
+    if (filepaths.length === 0 && trackIds.length === 0) return;
 
     askConfirmation({
       title: `ยืนยันการลบ ${selectedTracks.length} เพลง`,
@@ -2233,19 +2234,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       cancelText: 'ยกเลิก',
       onConfirm: async () => {
         // If active track is deleted, stop player first
-        if (activeTrack && selectedTracks.some((t) => t.id === activeTrack.id || t.filepath === activeTrack.filepath)) {
+        if (activeTrack && selectedTracks.some((t) => t.id === activeTrack.id || (t.filepath && activeTrack.filepath && t.filepath.toLowerCase().replace(/\\/g, '/') === activeTrack.filepath.toLowerCase().replace(/\\/g, '/')))) {
           stopAudioPlayback();
         }
         await invokeBackend('batch_delete_tracks', {
           filepaths,
+          track_ids: trackIds,
           delete_files: deleteFromDisk
         });
-        const selIds = new Set(selectedTracks.map((t) => t.id));
-        const selFps = new Set(filepaths);
-        setLibraryTracks((prev) => prev.filter((t) => !selIds.has(t.id) && (!t.filepath || !selFps.has(t.filepath))));
+        const selIds = new Set(trackIds);
+        const selFps = new Set(filepaths.map(fp => fp.toLowerCase().replace(/\\/g, '/')));
+        setLibraryTracks((prev) => prev.filter((t) => !selIds.has(t.id) && (!t.filepath || !selFps.has(t.filepath.toLowerCase().replace(/\\/g, '/')))));
         setSelectedLibIndices([]);
         await refreshLibrary();
-        showToast(`ลบ ${filepaths.length} เพลงเรียบร้อยแล้ว`, 'info');
+        showToast(`ลบ ${selectedTracks.length} เพลงเรียบร้อยแล้ว`, 'info');
       }
     });
   };
@@ -2381,7 +2383,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       cancelText: 'ยกเลิก',
       onConfirm: async () => {
         // If currently playing, stop playback first so file lock is released
-        if (activeTrack && (activeTrack.id === track.id || activeTrack.filepath === track.filepath)) {
+        if (activeTrack && (activeTrack.id === track.id || (track.filepath && activeTrack.filepath && activeTrack.filepath.toLowerCase().replace(/\\/g, '/') === track.filepath.toLowerCase().replace(/\\/g, '/')))) {
           stopAudioPlayback();
         }
         await invokeBackend('delete_history_track', {
@@ -2390,7 +2392,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           delete_file: true
         });
         // Optimistically remove from state
-        setLibraryTracks((prev) => prev.filter((t) => t.id !== track.id && (!track.filepath || t.filepath !== track.filepath)));
+        const targetFpNorm = track.filepath ? track.filepath.toLowerCase().replace(/\\/g, '/') : '';
+        setLibraryTracks((prev) => prev.filter((t) => t.id !== track.id && (!targetFpNorm || !t.filepath || t.filepath.toLowerCase().replace(/\\/g, '/') !== targetFpNorm)));
         await refreshLibrary();
         showToast(`ลบเพลง "${track.title}" ออกจากเครื่องแล้ว`, 'info');
       }

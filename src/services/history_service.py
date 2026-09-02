@@ -448,40 +448,63 @@ class HistoryService:
             print(f"[HistoryService] Error saving track: {e}")
 
     @classmethod
-    def delete_track(cls, filepath: str, delete_file: bool = False, track_id: Optional[str] = None) -> bool:
+    def delete_track(cls, filepath: str, delete_file: bool = True, track_id: Optional[str] = None) -> bool:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        norm_target = os.path.normpath(filepath).lower() if filepath else ''
+        norm_target = os.path.normpath(os.path.abspath(filepath)).lower() if filepath else ''
         
         remaining = []
-        target_path_to_delete = None
+        deleted_fps = []
         for t in tracks:
             t_fp = t.get('filepath', '')
-            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
-            t_id = t.get('id', '')
-            if (norm_target and t_norm == norm_target) or (track_id and t_id == track_id):
-                target_path_to_delete = t_fp or filepath
+            t_norm = os.path.normpath(os.path.abspath(t_fp)).lower() if t_fp else ''
+            t_id = str(t.get('id', ''))
+            
+            is_match = False
+            if norm_target and t_norm == norm_target:
+                is_match = True
+            elif track_id and (t_id == str(track_id) or str(t.get('id')) == str(track_id)):
+                is_match = True
+            
+            if is_match:
+                if t_fp:
+                    deleted_fps.append(t_fp)
                 continue
             remaining.append(t)
+
+        if filepath and filepath not in deleted_fps:
+            deleted_fps.append(filepath)
 
         try:
             with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(remaining, f, ensure_ascii=False, indent=2)
             
-            p_to_del = target_path_to_delete or filepath
-            if delete_file and p_to_del:
-                norm_p = os.path.normpath(p_to_del)
-                if os.path.exists(norm_p):
-                    try:
-                        os.remove(norm_p)
-                    except Exception as err:
-                        import gc
-                        gc.collect()
+            if delete_file:
+                import stat
+                import gc
+                for p in set(deleted_fps):
+                    if not p:
+                        continue
+                    norm_p = os.path.normpath(os.path.abspath(p))
+                    if os.path.exists(norm_p):
                         try:
+                            try:
+                                os.chmod(norm_p, stat.S_IWRITE)
+                            except Exception:
+                                pass
                             os.remove(norm_p)
-                        except Exception as err2:
-                            print(f"[HistoryService] Warning: Could not delete physical file: {err2}")
+                        except Exception:
+                            gc.collect()
+                            time.sleep(0.05)
+                            try:
+                                try:
+                                    os.chmod(norm_p, stat.S_IWRITE)
+                                except Exception:
+                                    pass
+                                os.remove(norm_p)
+                            except Exception as err:
+                                print(f"[HistoryService] Warning: Could not delete physical file: {err}")
             return True
         except Exception as e:
             print(f"[HistoryService] Error deleting track from DB: {e}")
@@ -492,10 +515,10 @@ class HistoryService:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        target_fps = {os.path.normpath(fp).lower() for fp in filepaths if fp}
+        target_fps = {os.path.normpath(os.path.abspath(fp)).lower() for fp in filepaths if fp}
         for t in tracks:
             t_fp = t.get('filepath', '')
-            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
+            t_norm = os.path.normpath(os.path.abspath(t_fp)).lower() if t_fp else ''
             if t_norm in target_fps:
                 t.update(updated_fields)
         try:
@@ -506,33 +529,49 @@ class HistoryService:
             return False
 
     @classmethod
-    def batch_delete_tracks(cls, filepaths: List[str], delete_files: bool = False) -> bool:
+    def batch_delete_tracks(cls, filepaths: List[str], delete_files: bool = True, track_ids: Optional[List[str]] = None) -> bool:
         cls._ensure_db()
         db_file = cls.get_db_file()
         tracks = cls.get_all()
-        target_fps = {os.path.normpath(fp).lower() for fp in filepaths if fp}
+        target_fps = {os.path.normpath(os.path.abspath(fp)).lower() for fp in filepaths if fp}
+        target_ids = {str(tid) for tid in (track_ids or []) if tid}
+        
         remaining = []
-        deleted_paths = []
+        deleted_paths = list(filepaths)
         for t in tracks:
             t_fp = t.get('filepath', '')
-            t_norm = os.path.normpath(t_fp).lower() if t_fp else ''
-            if t_norm in target_fps:
-                deleted_paths.append(t_fp)
+            t_norm = os.path.normpath(os.path.abspath(t_fp)).lower() if t_fp else ''
+            t_id = str(t.get('id', ''))
+            if (t_norm and t_norm in target_fps) or (t_id and t_id in target_ids):
+                if t_fp:
+                    deleted_paths.append(t_fp)
             else:
                 remaining.append(t)
         try:
             with open(db_file, 'w', encoding='utf-8') as f:
                 json.dump(remaining, f, ensure_ascii=False, indent=2)
             if delete_files:
-                for fp in deleted_paths:
-                    norm_p = os.path.normpath(fp)
+                import stat
+                import gc
+                for fp in set(deleted_paths):
+                    if not fp:
+                        continue
+                    norm_p = os.path.normpath(os.path.abspath(fp))
                     if os.path.exists(norm_p):
                         try:
+                            try:
+                                os.chmod(norm_p, stat.S_IWRITE)
+                            except Exception:
+                                pass
                             os.remove(norm_p)
                         except Exception:
-                            import gc
                             gc.collect()
+                            time.sleep(0.05)
                             try:
+                                try:
+                                    os.chmod(norm_p, stat.S_IWRITE)
+                                except Exception:
+                                    pass
                                 os.remove(norm_p)
                             except Exception:
                                 pass
