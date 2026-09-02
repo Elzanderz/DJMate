@@ -88,6 +88,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
+        python_bins.push("/Library/Developer/CommandLineTools/usr/bin/python3".to_string());
         python_bins.push("python3".to_string());
         python_bins.push("/opt/homebrew/bin/python3".to_string());
         python_bins.push("/usr/local/bin/python3".to_string());
@@ -104,6 +105,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
             .current_dir(&script_dir)
             .env("PYTHONPATH", &script_dir)
             .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUNBUFFERED", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

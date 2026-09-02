@@ -567,9 +567,10 @@ if __name__ == '__main__':
                 except Exception:
                     data = {'url': raw}
         resp = handle_command(cmd, data)
-        print(json.dumps(resp, ensure_ascii=False))
+        print(json.dumps(resp, ensure_ascii=False), flush=True)
+        sys.stdout.flush()
     else:
-        # Continuous High-Speed IPC Daemon Mode
+        # IPC Bridge Loop (reads line by line from stdin)
         for line in sys.stdin:
             line = line.strip()
             if not line:
@@ -580,5 +581,7 @@ if __name__ == '__main__':
                 payload = req.get('payload') or req.get('args') or {}
                 resp = handle_command(cmd, payload)
                 print(json.dumps(resp, ensure_ascii=False), flush=True)
+                sys.stdout.flush()
             except Exception as e:
                 print(json.dumps({'error': str(e)}), flush=True)
+                sys.stdout.flush()
