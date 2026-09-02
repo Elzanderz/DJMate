@@ -2984,12 +2984,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       </aside>
 
       {/* ================= RIGHT MAIN STAGE ================= */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0e0e11] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#121212] overflow-hidden">
         
         {/* Main Stage Header */}
-        <div className="px-8 pt-6 pb-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">
+        <div className="px-6 py-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-[#242424] bg-[#121212] shrink-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-black text-white tracking-tight truncate">
               {activeTab === 'queue'
                 ? 'Spotify & Download Queue'
                 : activeTab === 'yt_extractor'
@@ -3004,7 +3004,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 ? 'Activity & History Logs'
                 : 'Smart Mixtape Sequencer'}
             </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
+            <p className="text-xs text-[#a7a7a7] mt-0.5 truncate">
               {activeTab === 'queue'
                 ? 'Convert Spotify tracks/playlists to 320kbps Lossless, analyze Key/BPM & auto-tag for DJing'
                 : activeTab === 'yt_extractor'
@@ -3022,11 +3022,11 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           </div>
 
           {/* Settings Dropdowns */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <select
               value={format}
               onChange={(e) => setFormat(e.target.value)}
-              className="bg-[#18181c] text-white text-xs font-semibold px-3 py-1.5 rounded-xl border border-white/10 focus:outline-none cursor-pointer"
+              className="bg-[#242424] hover:bg-[#282828] text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#333333] focus:outline-none cursor-pointer transition"
             >
               <option value="MP3">MP3 320k</option>
               <option value="FLAC">FLAC Lossless</option>
@@ -3037,7 +3037,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             <select
               value={stemType}
               onChange={(e) => setStemType(e.target.value)}
-              className="bg-[#18181c] text-white text-xs font-semibold px-3 py-1.5 rounded-xl border border-white/10 focus:outline-none cursor-pointer"
+              className="bg-[#242424] hover:bg-[#282828] text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#333333] focus:outline-none cursor-pointer transition"
             >
               <option value="full">🎵 Full Track</option>
               <option value="acapella">🎤 Acapella (Vocal)</option>
@@ -3047,10 +3047,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             <select
               value={folderMode}
               onChange={(e) => setFolderMode(e.target.value)}
-              className="bg-[#18181c] text-white text-xs font-semibold px-3 py-1.5 rounded-xl border border-white/10 focus:outline-none cursor-pointer"
+              className="bg-[#242424] hover:bg-[#282828] text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#333333] focus:outline-none cursor-pointer transition max-w-[230px] truncate"
             >
-              <option value="playlist">📁 By Playlist / Chart (แยกตาม Playlist + .m3u8)</option>
-              <option value="single">📁 Single Folder (โฟลเดอร์รวม ไม่แยก)</option>
+              <option value="playlist">📁 By Playlist / Chart</option>
+              <option value="single">📁 Single Folder (รวม)</option>
               <option value="artist_album">👤 Artist / Album</option>
               <option value="camelot_key">🎛️ Camelot Key</option>
             </select>
@@ -3066,23 +3066,23 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   setTargetLufs(parseFloat(e.target.value));
                 }
               }}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition cursor-pointer ${
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition cursor-pointer ${
                 normalizeAudio
-                  ? 'bg-teal-500/10 border-teal-500/40 text-teal-300 font-bold'
-                  : 'bg-[#18181c] border-white/10 text-zinc-400'
+                  ? 'bg-[#1DB954]/20 border-[#1DB954]/50 text-[#1DB954] font-bold'
+                  : 'bg-[#242424] hover:bg-[#282828] border-[#333333] text-[#a7a7a7]'
               }`}
               title="EBU R128 Auto-Gain Volume Normalization across all tracks"
             >
-              <option value="-14">⚖️ Auto-Gain (-14 LUFS DJ Std)</option>
-              <option value="-12">🔊 Club Boost (-12 LUFS Loud)</option>
-              <option value="-16">🎧 Streaming (-16 LUFS Soft)</option>
-              <option value="off">🚫 No Normalization (Original Volume)</option>
+              <option value="-14">⚖️ Auto-Gain (-14 LUFS)</option>
+              <option value="-12">🔊 Club Boost (-12 LUFS)</option>
+              <option value="-16">🎧 Streaming (-16 LUFS)</option>
+              <option value="off">🚫 No Normalization</option>
             </select>
           </div>
         </div>
 
         {/* Content View Container */}
-        <div className="flex-1 flex flex-col min-h-0 px-8 pb-4 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 px-6 py-4 pb-24 overflow-hidden">
           
           {/* ================= VIEW 1: SPOTIFY & QUEUE ================= */}
           {activeTab === 'queue' && (
@@ -5191,188 +5191,160 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
       </div>
 
-      {/* Audio Preview Dock: Authentic Beatport Pro Player */}
+      {/* Audio Preview Dock: Pro Spotify / Rekordbox Responsive Player */}
       <footer
         onContextMenu={(e) => handleOpenContextMenu(e, activeTrack, 'player')}
-        className="fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0c]/98 backdrop-blur-2xl border-t border-white/10 px-5 flex items-center justify-between text-white z-50 shadow-2xl"
+        className="fixed bottom-0 left-0 right-0 h-20 bg-[#181818] border-t border-[#282828] px-4 sm:px-6 flex items-center justify-between text-white z-50 select-none shadow-2xl"
       >
-        {/* 1. Left: Cover Art + Title / Artist / Spectrum (Clickable to expand) */}
+        {/* 1. LEFT SECTION: Cover Art + Title + Artist + Camelot/BPM */}
         <div
           onClick={() => setShowExpandedPlayer(true)}
-          className="flex items-center gap-3 w-[270px] min-w-[220px] flex-shrink-0 cursor-pointer group hover:opacity-95 transition"
+          className="flex items-center gap-3 w-56 sm:w-64 max-w-[30%] shrink-0 min-w-0 cursor-pointer group hover:opacity-90 transition"
           title="Click to open Fullscreen Pro DJ Player"
         >
-          <div className="w-11 h-11 rounded-xl bg-[#16161a] overflow-hidden flex-shrink-0 shadow-lg border border-white/10 relative">
+          <div className="w-12 h-12 rounded-lg bg-[#242424] overflow-hidden shrink-0 border border-[#333333] relative shadow-md">
             {activeTrack?.cover_url ? (
               <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+              <div className="w-full h-full flex items-center justify-center text-sm text-zinc-500">🎵</div>
             )}
-            {/* Live Audio Spectrum Equalizer Animation */}
             {isPlaying && (
-              <div className="absolute inset-0 bg-black/50 flex items-end justify-center gap-0.5 pb-1 px-1 pointer-events-none">
-                <span className="w-1 bg-emerald-400 rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
-                <span className="w-1 bg-teal-300 rounded-t animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-5" />
-                <span className="w-1 bg-cyan-400 rounded-t animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-4" />
-                <span className="w-1 bg-sky-300 rounded-t animate-[bounce_0.5s_ease-in-out_infinite_0.15s] h-6" />
+              <div className="absolute inset-0 bg-black/40 flex items-end justify-center gap-0.5 pb-1 px-1 pointer-events-none">
+                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
+                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-5" />
+                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-4" />
+                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.5s_ease-in-out_infinite_0.15s] h-6" />
               </div>
             )}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-              <span className="text-[10px] font-bold text-white">⛶ EXPAND</span>
-            </div>
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                DECK A
-              </span>
-              {isAutoDjEnabled && <span className="text-[9px] font-bold text-emerald-400 font-mono">● AUTO-DJ</span>}
-            </div>
-            <p className="text-xs font-bold text-white truncate leading-tight mt-0.5 group-hover:text-emerald-400 transition">{activeTrack?.title || 'No track playing'}</p>
-            <p className="text-[11px] text-zinc-400 truncate mt-0.5 leading-tight">{activeTrack?.artist || 'Select a track to start'}</p>
-          </div>
-        </div>
-
-        {/* 2. Metadata: Time / BPM / Smart Camelot Glow Badge */}
-        <div className="flex flex-col justify-center text-right font-mono pr-4 pl-1 flex-shrink-0 select-none">
-          <div className="text-xs font-bold">
-            <span className="text-white">{formatTime(currentTime)}</span>
-            <span className="text-zinc-500 font-normal"> / {formatTime(duration)}</span>
-          </div>
-          <div className="text-[10px] text-zinc-400 font-medium leading-tight mt-0.5 flex items-center justify-end gap-1.5">
-            <span>{activeTrack?.bpm ? `${Math.round(activeTrack.bpm)} BPM` : '128 BPM'}</span>
-            <CamelotBadge
-              camelotKey={activeTrack?.camelot || '8A'}
-              keyName={activeTrack?.key_name}
-              showHarmonicTag={false}
-              onClick={() => {
-                setSelectedKeyForWheel(activeTrack?.camelot || '8A');
-                setShowCamelotModal(true);
-              }}
-            />
-          </div>
-        </div>
-
-        {/* 3. Center: Beatport Symmetrical Waveform & Quick Cue Jumps */}
-        <div className="flex-1 min-w-[200px] px-2 flex flex-col justify-center gap-1">
-          <BeatportWaveform
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={handleSeek}
-            track={activeTrack}
-          />
-          {activeTrack && (
-            <div className="flex items-center justify-between px-1 text-[10px] font-mono font-semibold text-zinc-500">
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Intro')?.start || 0)}
-                  className="px-1.5 py-0.2 rounded bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
-                  title="Jump to Intro (0:00)"
-                >
-                  <span>🟢 IN</span>
-                </button>
-                <button
-                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Drop')?.start || (duration * 0.45))}
-                  className="px-1.5 py-0.2 rounded bg-sky-500/15 hover:bg-sky-500/30 text-sky-400 border border-sky-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
-                  title="Jump to Main Drop"
-                >
-                  <span>⚡ DROP</span>
-                </button>
-                <button
-                  onClick={() => handleSeek(activeTrack?.cues?.find((c: any) => c.name === 'Outro')?.start || Math.max(15, duration - 30))}
-                  className="px-1.5 py-0.2 rounded bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 text-[9px] font-bold transition flex items-center gap-0.5 active:scale-95"
-                  title="Jump to Outro Mix-Out"
-                >
-                  <span>🔴 OUT</span>
-                </button>
+            <p className="text-xs font-bold text-white truncate group-hover:text-[#1DB954] transition leading-tight">
+              {activeTrack?.title || 'ไม่ได้เปิดเพลง'}
+            </p>
+            <p className="text-[11px] text-[#a7a7a7] truncate mt-0.5 leading-tight">
+              {activeTrack?.artist || 'เลือกเพลงเพื่อเล่น'}
+            </p>
+            {activeTrack && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9px] font-mono text-[#a7a7a7]">
+                  {activeTrack.bpm ? `${Math.round(activeTrack.bpm)} BPM` : '128 BPM'}
+                </span>
+                <span className="text-zinc-600 text-[9px]">•</span>
+                <CamelotBadge
+                  camelotKey={activeTrack.camelot || '8A'}
+                  keyName={activeTrack.key_name}
+                  showHarmonicTag={false}
+                  onClick={() => {
+                    setSelectedKeyForWheel(activeTrack.camelot || '8A');
+                    setShowCamelotModal(true);
+                  }}
+                />
               </div>
-              <span className="text-[9px] text-zinc-500">
-                {activeTrack.genre || 'Electronic / Dance'} • {activeTrack.label || 'DJ Studio'}
-              </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* 4. Right Controls: DJ Auto-Mix, Queue, Shuffle, Prev, Play, Next, Repeat, Volume */}
-        <div className="flex items-center gap-2.5 pl-3 flex-shrink-0">
-          {/* Auto-DJ Toggle */}
-          <button
-            onClick={() => {
-              const next = !isAutoDjEnabled;
-              setIsAutoDjEnabled(next);
-              showToast(next ? '🤖 Auto-DJ Mix Mode Enabled (Harmonic Continuous)' : 'Auto-DJ Disabled', 'info');
-            }}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition flex items-center gap-1 ${
-              isAutoDjEnabled
-                ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40'
-                : 'bg-[#242424] text-[#b3b3b3] border-[#333333] hover:text-white'
-            }`}
-            title="Auto-DJ Mode: Automatically mixes harmonic songs continuously"
-          >
-            <span>🤖</span>
-            <span>AUTO DJ</span>
-          </button>
+        {/* 2. CENTER SECTION: Controls (Top) + Waveform Scrubber (Bottom) */}
+        <div className="flex-1 max-w-xl px-2 sm:px-4 flex flex-col items-center justify-center min-w-0">
+          {/* Top Controls Row */}
+          <div className="flex items-center gap-3 sm:gap-4 mb-1">
+            <button
+              onClick={() => {
+                const next = !isAutoDjEnabled;
+                setIsAutoDjEnabled(next);
+                showToast(next ? '🤖 Auto-DJ Mix Mode Enabled' : 'Auto-DJ Disabled', 'info');
+              }}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition flex items-center gap-1 ${
+                isAutoDjEnabled
+                  ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40'
+                  : 'bg-[#242424] text-[#b3b3b3] border-[#333333] hover:text-white'
+              }`}
+              title="Auto-DJ Mode"
+            >
+              <span>🤖</span>
+              <span className="hidden xs:inline">AUTO DJ</span>
+            </button>
 
-          {/* Shuffle Toggle */}
-          <button
-            onClick={() => {
-              setIsShuffle(!isShuffle);
-              showToast(!isShuffle ? 'Shuffle On' : 'Shuffle Off', 'info');
-            }}
-            className={`p-1.5 rounded-lg text-xs transition ${
-              isShuffle ? 'text-emerald-400 bg-emerald-500/15 font-bold' : 'text-zinc-500 hover:text-white'
-            }`}
-            title={isShuffle ? 'Shuffle On' : 'Shuffle Off'}
-          >
-            🔀
-          </button>
+            <button
+              onClick={() => {
+                setIsShuffle(!isShuffle);
+                showToast(!isShuffle ? 'Shuffle On' : 'Shuffle Off', 'info');
+              }}
+              className={`text-xs p-1 transition ${
+                isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title="Shuffle"
+            >
+              🔀
+            </button>
 
-          {/* Previous Track */}
-          <button
-            onClick={handlePlayPrev}
-            className="text-zinc-400 hover:text-white text-xs p-1.5 rounded-lg hover:bg-white/5 transition"
-            title="Previous Track"
-          >
-            ⏮
-          </button>
+            <button
+              onClick={handlePlayPrev}
+              className="text-[#b3b3b3] hover:text-white text-xs sm:text-sm p-1 transition active:scale-95"
+              title="Previous Track"
+            >
+              ⏮
+            </button>
 
-          {/* Big Circular Play/Pause Button */}
-          <button
-            onClick={togglePlay}
-            className="w-10 h-10 rounded-full bg-gradient-to-tr from-zinc-800 to-zinc-700 hover:from-emerald-600 hover:to-teal-600 active:scale-95 text-white font-bold text-sm flex items-center justify-center shadow-lg border border-white/10 transition"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
+            {/* Circular Play / Pause Button */}
+            <button
+              onClick={togglePlay}
+              className="w-8 h-8 rounded-full bg-white hover:bg-[#f0f0f0] hover:scale-105 active:scale-95 text-black font-bold text-sm flex items-center justify-center transition shadow-none"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
 
-          {/* Next Track */}
-          <button
-            onClick={handlePlayNext}
-            className="text-zinc-400 hover:text-white text-xs p-1.5 rounded-lg hover:bg-white/5 transition"
-            title="Next Track / Mix Next"
-          >
-            ⏭
-          </button>
+            <button
+              onClick={handlePlayNext}
+              className="text-[#b3b3b3] hover:text-white text-xs sm:text-sm p-1 transition active:scale-95"
+              title="Next Track"
+            >
+              ⏭
+            </button>
 
-          {/* Repeat Toggle */}
-          <button
-            onClick={() => {
-              const next = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
-              setRepeatMode(next);
-              showToast(`Repeat: ${next.toUpperCase()}`, 'info');
-            }}
-            className={`p-1.5 rounded-lg text-xs transition relative ${
-              repeatMode !== 'off' ? 'text-sky-400 bg-sky-500/15 font-bold' : 'text-zinc-500 hover:text-white'
-            }`}
-            title={`Repeat: ${repeatMode}`}
-          >
-            🔁{repeatMode === 'one' && <span className="text-[8px] font-mono font-bold absolute top-0.5 right-0.5 bg-sky-400 text-black rounded-full px-0.5">1</span>}
-          </button>
+            <button
+              onClick={() => {
+                const next = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+                setRepeatMode(next);
+                showToast(`Repeat: ${next.toUpperCase()}`, 'info');
+              }}
+              className={`text-xs p-1 transition relative ${
+                repeatMode !== 'off' ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title={`Repeat: ${repeatMode}`}
+            >
+              🔁{repeatMode === 'one' && <span className="text-[7px] font-bold absolute -top-1 -right-1 bg-[#1DB954] text-black rounded-full px-0.5">1</span>}
+            </button>
+          </div>
 
-          {/* Volume Slider & Controls */}
+          {/* Bottom Scrubber & Time */}
+          <div className="w-full flex items-center gap-2">
+            <span className="text-[10px] font-mono text-[#a7a7a7] w-8 text-right shrink-0">
+              {formatTime(currentTime)}
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <BeatportWaveform
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={handleSeek}
+                track={activeTrack}
+              />
+            </div>
+
+            <span className="text-[10px] font-mono text-[#a7a7a7] w-8 shrink-0">
+              {formatTime(duration)}
+            </span>
+          </div>
+        </div>
+
+        {/* 3. RIGHT SECTION: Volume + Queue + Fullscreen */}
+        <div className="w-56 sm:w-64 max-w-[30%] shrink-0 flex items-center justify-end gap-2 sm:gap-2.5 min-w-0">
+          {/* Volume Section */}
           <div
-            className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-xl border border-white/5"
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#242424] rounded-full border border-[#333333]"
             onWheel={(e) => {
               e.preventDefault();
               changeVolumeStep(e.deltaY < 0 ? 0.05 : -0.05);
@@ -5380,7 +5352,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           >
             <button
               onClick={toggleMute}
-              className="text-xs text-zinc-400 hover:text-white transition p-0.5"
+              className="text-xs text-[#a7a7a7] hover:text-white transition p-0.5"
               title={isMuted || volume === 0 ? 'Unmute (M)' : 'Mute (M)'}
             >
               {isMuted || volume === 0 ? '🔇' : volume < 0.35 ? '🔈' : volume < 0.7 ? '🔉' : '🔊'}
@@ -5392,33 +5364,34 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               step="0.01"
               value={isMuted ? 0 : volume}
               onChange={handleVolume}
-              className="w-16 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
-              title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}% (Scroll to adjust, M to mute)`}
+              className="w-12 sm:w-16 md:w-20 h-1 bg-[#3e3e3e] rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
+              title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
             />
-            <span className="text-[10px] font-mono font-semibold text-emerald-400 w-7 text-right">
+            <span className="text-[10px] font-mono font-bold text-[#1DB954] w-6 sm:w-7 text-right">
               {isMuted || volume === 0 ? '0%' : `${Math.round(volume * 100)}%`}
             </span>
           </div>
 
-          {/* Up Next Queue Button with Badge */}
+          {/* Queue Drawer Button */}
           <button
             onClick={() => setShowQueueDrawer(true)}
-            className="relative px-2.5 py-1 rounded-xl bg-[#1e1e24] hover:bg-[#282830] text-zinc-300 font-semibold text-xs border border-white/5 transition flex items-center gap-1.5"
-            title="Open Up Next Queue & Recommendations"
+            className="relative px-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#282828] text-[#e0e0e0] hover:text-white font-semibold text-xs border border-[#333333] transition flex items-center gap-1 shrink-0"
+            title="Open Up Next Queue"
           >
-            <span>📑 Queue</span>
+            <span>📑</span>
+            <span className="hidden md:inline">Queue</span>
             {playQueue.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-mono text-[9px] font-bold shadow">
+              <span className="px-1.5 py-0.2 rounded-full bg-[#1DB954] text-black font-mono text-[9px] font-bold">
                 {playQueue.length}
               </span>
             )}
           </button>
 
-          {/* Fullscreen Expand Player */}
+          {/* Expand Fullscreen Button */}
           <button
             onClick={() => setShowExpandedPlayer(true)}
-            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg text-xs transition"
-            title="Expand Fullscreen Apple Music / Spotify Player"
+            className="p-1.5 text-[#a7a7a7] hover:text-white hover:bg-[#242424] rounded-lg text-xs transition shrink-0"
+            title="Expand Fullscreen Player"
           >
             ⛶
           </button>
