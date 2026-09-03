@@ -548,7 +548,7 @@ export default function App() {
   const handleFetchGigCrates = async () => {
     setIsClassifyingCrates(true);
     try {
-      const crates = await invokeBackend('get_gig_crates', { tracks: libraryTracks.length > 0 ? libraryTracks : undefined });
+      const crates = await invokeBackend('get_gig_crates', {});
       if (Array.isArray(crates)) {
         setGigCrates(crates);
       }
@@ -569,7 +569,6 @@ export default function App() {
     showToast('🤖 AI organizing library into Profile Storage Folders & Rekordbox Crates...', 'info');
     try {
       const res: any = await invokeBackend('build_gig_storage', {
-        tracks: libraryTracks.length > 0 ? libraryTracks : undefined,
         target_dir: outputDir
       });
       if (res && res.success) {
@@ -590,7 +589,6 @@ export default function App() {
     setIsFindingMashups(true);
     try {
       const res: any = await invokeBackend('find_mashup_matches', {
-        tracks: libraryTracks.length > 0 ? libraryTracks : undefined,
         min_score: 80,
         limit: 50
       });
@@ -608,9 +606,7 @@ export default function App() {
     setShowCleanerModal(true);
     setIsScanningDuplicates(true);
     try {
-      const res: any = await invokeBackend('scan_duplicates', {
-        tracks: libraryTracks.length > 0 ? libraryTracks : undefined
-      });
+      const res: any = await invokeBackend('scan_duplicates', {});
       if (res) {
         setDuplicateData(res);
       }
@@ -6288,10 +6284,27 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
             {isScanningDuplicates ? (
               <div className="flex flex-col items-center justify-center py-20 text-zinc-400 space-y-3 flex-1">
-                <span className="animate-spin text-3xl">↻</span>
-                <p className="text-xs font-semibold">Scanning library files for duplicates and inspecting bitrates...</p>
+                <span className="animate-spin text-3xl text-amber-400">↻</span>
+                <p className="text-sm font-semibold text-white">กำลังสแกนค้นหาไฟล์เพลงซ้ำและตรวจสอบบิตเรต...</p>
+                <p className="text-xs text-zinc-500">ระบบกำลังเปรียบเทียบลายพิมพ์เสียงและตรวจสอบคุณภาพไฟล์ในคลัง</p>
               </div>
-            ) : duplicateData ? (
+            ) : !duplicateData ? (
+              <div className="flex flex-col items-center justify-center py-16 text-zinc-400 space-y-4 flex-1">
+                <span className="text-4xl">🧹</span>
+                <p className="text-base font-bold text-white">พร้อมตรวจสอบไฟล์เพลงซ้ำและบิตเรต</p>
+                <p className="text-xs text-zinc-400 max-w-sm text-center">
+                  ระบบจะสแกนคลังเพลงทั้งหมดเพื่อค้นหาไฟล์เพลงที่ซ้ำกัน และตรวจจับเพลงที่มีบิตเรตต่ำกว่า 256kbps เพื่อให้คุณอัปเกรดเป็น 320kbps คุณภาพสูง
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenCleanerModal}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs shadow-lg shadow-amber-500/20 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <span>🔍</span>
+                  <span>เริ่มสแกนไฟล์ซ้ำ (Scan Library)</span>
+                </button>
+              </div>
+            ) : (
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 {/* Summary Banner */}
                 <div className="grid grid-cols-3 gap-3 text-xs">
@@ -6577,7 +6590,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   </div>
                 )}
               </div>
-            ) : null}
+            )}
 
             <div className="flex items-center justify-between pt-3 border-t border-white/5 flex-shrink-0">
               <button

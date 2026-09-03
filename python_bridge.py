@@ -545,14 +545,21 @@ if __name__ == '__main__':
         data = {}
         if len(sys.argv) > 2:
             raw = sys.argv[2]
-            try:
-                data = json.loads(raw)
-            except Exception:
+            if os.path.isfile(raw) and raw.lower().endswith('.json'):
                 try:
-                    import base64
-                    data = json.loads(base64.b64decode(raw.encode('utf-8')).decode('utf-8'))
+                    with open(raw, 'r', encoding='utf-8') as f_arg:
+                        data = json.load(f_arg)
                 except Exception:
-                    data = {'url': raw}
+                    data = {}
+            else:
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    try:
+                        import base64
+                        data = json.loads(base64.b64decode(raw.encode('utf-8')).decode('utf-8'))
+                    except Exception:
+                        data = {'url': raw}
         resp = handle_command(cmd, data)
         print(json.dumps(resp, ensure_ascii=False), flush=True)
         sys.stdout.flush()
