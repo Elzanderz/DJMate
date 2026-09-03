@@ -335,8 +335,8 @@ class HistoryService:
                         t['source'] = 'Spotify'
 
                 # Backfill cover if missing
-                if not t.get('cover_url'):
-                    cov = cls.extract_cover(resolved_fp, t.get('artist', ''), t.get('title', ''))
+                if not t.get('cover_url') or len(t.get('cover_url', '')) < 15:
+                    cov = cls.extract_cover(resolved_fp, t.get('artist', ''), t.get('title', ''), fetch_online=True)
                     if cov:
                         t['cover_url'] = cov
                         needs_save = True
@@ -388,7 +388,7 @@ class HistoryService:
             except Exception:
                 pass
 
-            cover_url = cls.extract_cover(abs_fp, artist, title)
+            cover_url = cls.extract_cover(abs_fp, artist, title, fetch_online=True)
             playlist_name = file_info['playlist_name']
             source = 'Beatport' if 'beatport' in playlist_name.lower() else 'YouTube' if 'youtube' in playlist_name.lower() else 'Apple Music' if 'apple' in playlist_name.lower() else 'Spotify'
 

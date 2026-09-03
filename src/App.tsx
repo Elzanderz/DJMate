@@ -853,6 +853,36 @@ export default function App() {
     };
   }, []);
 
+const TrackCoverImage: React.FC<{ src?: string; className?: string; alt?: string; fallbackIcon?: string }> = ({
+  src,
+  className = "w-full h-full object-cover",
+  alt = "",
+  fallbackIcon = "🎵"
+}) => {
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setError(false);
+  }, [src]);
+
+  if (!src || error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400 bg-gradient-to-br from-zinc-800 to-zinc-900 select-none">
+        {fallbackIcon}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setError(true)}
+    />
+  );
+};
+
 interface BeatportWaveformProps {
   currentTime: number;
   duration: number;
@@ -3518,11 +3548,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
                           <div className="col-span-4 flex items-center gap-3.5 min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-[#202026] flex-shrink-0 overflow-hidden shadow border border-white/5">
-                              {t.cover_url ? (
-                                <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">🎵</div>
-                              )}
+                              <TrackCoverImage src={t.cover_url} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className={`text-sm font-semibold truncate leading-snug ${t.done ? 'text-emerald-400' : 'text-white'}`}>{t.title}</p>
@@ -5451,11 +5477,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           title="Click to open Fullscreen Pro DJ Player"
         >
           <div className="w-12 h-12 rounded-lg bg-[#242424] overflow-hidden shrink-0 border border-[#333333] relative shadow-md">
-            {activeTrack?.cover_url ? (
-              <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm text-zinc-500">🎵</div>
-            )}
+            <TrackCoverImage
+              src={activeTrack?.cover_url}
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+            />
             {isPlaying && (
               <div className="absolute inset-0 bg-black/40 flex items-end justify-center gap-0.5 pb-1 px-1 pointer-events-none">
                 <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
@@ -7440,11 +7465,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                               #{idx + 1}
                             </span>
                             <div className="w-8 h-8 rounded-lg bg-[#202026] overflow-hidden flex-shrink-0">
-                              {t.cover_url ? (
-                                <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
-                              )}
+                              <TrackCoverImage src={t.cover_url} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="font-bold text-white truncate">{t.title}</p>

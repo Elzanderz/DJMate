@@ -17,6 +17,17 @@ class TaggerService:
         # Download cover art if available
         cover_data = None
         cover_url = metadata.get('cover_url')
+        if not cover_url:
+            try:
+                from .history_service import HistoryService
+                q = f"{metadata.get('artist', '')} {metadata.get('title', '')}".strip()
+                if q:
+                    cover_url = HistoryService._fetch_itunes_cover(q)
+                    if cover_url:
+                        metadata['cover_url'] = cover_url
+            except Exception:
+                pass
+
         if cover_url:
             try:
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
