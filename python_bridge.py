@@ -481,14 +481,41 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
     elif cmd_name == 'get_audio_data_url':
         filepath = payload.get('filepath', '')
         if not filepath or not os.path.exists(filepath):
-            # Auto-recovery fallback: search in downloads folder
+            # Auto-recovery fallback: search in parent folder and downloads
             candidate = None
             if filepath:
+                parent_dir = os.path.dirname(filepath)
                 bn = os.path.basename(filepath)
-                for root, dirs, files in os.walk('downloads'):
-                    if bn in files:
-                        candidate = os.path.abspath(os.path.join(root, bn))
-                        break
+                clean_bn = re.sub(r'^\d+\.\s*', '', bn)
+
+                # 1. Check parent directory first
+                if parent_dir and os.path.exists(parent_dir):
+                    for fn in (bn, clean_bn):
+                        p = os.path.join(parent_dir, fn)
+                        if os.path.exists(p):
+                            candidate = p
+                            break
+                    if not candidate:
+                        for f in os.listdir(parent_dir):
+                            if (clean_bn.lower() in f.lower() or f.lower() in clean_bn.lower()) and f.lower().endswith(('.mp3', '.m4a', '.wav', '.flac')):
+                                candidate = os.path.join(parent_dir, f)
+                                break
+
+                # 2. Search downloads folder
+                if not candidate:
+                    for search_dir in ('downloads', output_dir):
+                        if os.path.exists(search_dir):
+                            for root, dirs, files in os.walk(search_dir):
+                                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                                for f in files:
+                                    if f in (bn, clean_bn) or ((clean_bn.lower() in f.lower() or f.lower() in clean_bn.lower()) and f.lower().endswith(('.mp3', '.m4a', '.wav', '.flac'))):
+                                        candidate = os.path.abspath(os.path.join(root, f))
+                                        break
+                                if candidate:
+                                    break
+                        if candidate:
+                            break
+
             if not candidate:
                 return {'result': ''}
             filepath = candidate

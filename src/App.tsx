@@ -822,14 +822,24 @@ export default function App() {
         }
       };
 
+      const onError = (e: Event) => {
+        console.warn(`Deck ${deckId} audio error, skipping to next track:`, e);
+        if (activeDeckRef.current === deckId) {
+          stopCrossfade();
+          setTimeout(() => handlePlayNext(false), 600);
+        }
+      };
+
       deck.addEventListener('timeupdate', onTime);
       deck.addEventListener('loadedmetadata', onMeta);
       deck.addEventListener('ended', onEnded);
+      deck.addEventListener('error', onError);
 
       return () => {
         deck.removeEventListener('timeupdate', onTime);
         deck.removeEventListener('loadedmetadata', onMeta);
         deck.removeEventListener('ended', onEnded);
+        deck.removeEventListener('error', onError);
       };
     };
 
@@ -1273,7 +1283,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
     const dataUrl = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
     if (!dataUrl) {
-      showToast('Cannot load audio file', 'info');
+      showToast(`Cannot load audio for "${t.title}". Skipping to next track...`, 'info');
+      setTimeout(() => handlePlayNext(false), 600);
       return;
     }
 
@@ -1293,7 +1304,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       try {
         await newDeck.play();
       } catch (err) {
-        console.error("Audio playback error", err);
+        console.warn("Audio playback error during crossfade, switching directly:", err);
+        stopCrossfade();
+        newDeck.volume = getEffectiveVolume();
+        try { await newDeck.play(); } catch (_) {}
       }
 
       setCurrentTime(0);
