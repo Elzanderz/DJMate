@@ -43,13 +43,13 @@ class AudioNormalizerService:
         codec_args = []
         if ext == '.mp3':
             kbps = f"{audio_quality}k" if audio_quality and not str(audio_quality).endswith('k') else (audio_quality or '320k')
-            codec_args = ['-c:a', 'libmp3lame', '-b:a', str(kbps)]
+            codec_args = ['-c:a', 'libmp3lame', '-b:a', str(kbps), '-q:a', '0', '-ar', '44100']
         elif ext in ('.wav', '.flac'):
-            codec_args = ['-c:a', 'flac' if ext == '.flac' else 'pcm_s16le']
+            codec_args = ['-c:a', 'flac' if ext == '.flac' else 'pcm_s16le', '-ar', '44100']
         elif ext in ('.m4a', '.aac'):
-            codec_args = ['-c:a', 'aac', '-b:a', '256k']
+            codec_args = ['-c:a', 'aac', '-b:a', '256k', '-ar', '44100']
         else:
-            codec_args = ['-c:a', 'libmp3lame', '-b:a', '320k']
+            codec_args = ['-c:a', 'libmp3lame', '-b:a', '320k', '-q:a', '0', '-ar', '44100']
 
         filter_str = f"loudnorm=I={target_lufs}:TP={true_peak}:LRA={cls.DEFAULT_LRA}"
 

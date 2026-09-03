@@ -48,21 +48,69 @@ class SpotifyService:
                 pass
 
     @classmethod
+    def _is_unwanted_version(cls, title: str, artist: str, query: str, expected_artist: str = '', expected_title: str = '') -> bool:
+        """Check if candidate is an unwanted karaoke, tribute, or mismatched song."""
+        t_low = (title or '').lower()
+        a_low = (artist or '').lower()
+        q_low = (query or '').lower()
+
+        # If user explicitly searched for karaoke or tribute, allow it
+        if 'karaoke' in q_low or 'tribute' in q_low or 'cover' in q_low:
+            return False
+
+        bad_phrases = [
+            'karaoke', 'tribute to', 'originally performed by', 'originally by',
+            'made famous by', 'in the style of', 'as made famous by', 'tribute version',
+            'cover version', 'instrumental cover', 'backing track', 'minus one'
+        ]
+        if any(bad in t_low or bad in a_low for bad in bad_phrases):
+            return True
+
+        # Check artist match if an expected artist was given in query
+        if expected_artist:
+            exp_clean = re.sub(r'[^\w\s]', '', expected_artist.lower()).strip()
+            art_clean = re.sub(r'[^\w\s]', '', a_low).strip()
+            exp_words = [w for w in exp_clean.split() if len(w) > 1]
+            if exp_words and not any(w in art_clean for w in exp_words):
+                return True
+
+        # Check title match if an expected title was given
+        if expected_title:
+            exp_t_clean = re.sub(r'[^\w\s]', '', expected_title.lower()).strip()
+            title_clean = re.sub(r'[^\w\s]', '', t_low).strip()
+            t_words = [w for w in exp_t_clean.split() if len(w) > 1]
+            if t_words and not any(w in title_clean for w in t_words):
+                return True
+
+        return False
+
+    @classmethod
     def search_track(cls, query: str) -> Optional[Dict]:
         """Search music databases (Deezer / iTunes / Spotify) for official track metadata, high-res cover art, album, and duration."""
         if not query or len(query.strip()) < 2:
             return None
         q = query.strip()
 
+        # Extract expected artist and title if query is in 'Artist - Title' format
+        expected_artist = ''
+        expected_title = ''
+        if ' - ' in q:
+            parts = q.split(' - ', 1)
+            expected_artist, expected_title = parts[0].strip(), parts[1].strip()
+        elif ' – ' in q:
+            parts = q.split(' – ', 1)
+            expected_artist, expected_title = parts[0].strip(), parts[1].strip()
+
         # 1. Deezer Fast Public Search (Highest accuracy for DJ tracks, EDM, Hip-Hop, Pop)
         try:
-            r = requests.get('https://api.deezer.com/search', params={'q': q, 'limit': 1}, timeout=2.5)
+            r = requests.get('https://api.deezer.com/search', params={'q': q, 'limit': 5}, timeout=2.5)
             if r.status_code == 200:
                 data = r.json().get('data', [])
-                if data:
-                    d = data[0]
+                for d in data:
                     artists = d.get('artist', {}).get('name', '')
                     title = d.get('title', q)
+                    if cls._is_unwanted_version(title, artists, q, expected_artist, expected_title):
+                        continue
                     album = d.get('album', {}).get('title', '')
                     cover = d.get('album', {}).get('cover_big') or d.get('album', {}).get('cover_medium') or ''
                     dur = int(d.get('duration', 0) * 1000)
@@ -82,13 +130,14 @@ class SpotifyService:
 
         # 2. iTunes Public Search API Fallback
         try:
-            r = requests.get('https://itunes.apple.com/search', params={'term': q, 'media': 'music', 'limit': 1}, timeout=2.5)
+            r = requests.get('https://itunes.apple.com/search', params={'term': q, 'media': 'music', 'limit': 5}, timeout=2.5)
             if r.status_code == 200:
                 results = r.json().get('results', [])
-                if results:
-                    d = results[0]
+                for d in results:
                     artists = d.get('artistName', '')
                     title = d.get('trackName', q)
+                    if cls._is_unwanted_version(title, artists, q, expected_artist, expected_title):
+                        continue
                     album = d.get('collectionName', '')
                     cover = d.get('artworkUrl100', '').replace('100x100bb', '600x600bb')
                     dur = int(d.get('trackTimeMillis', 0))
