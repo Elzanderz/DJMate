@@ -65,6 +65,25 @@ class AICuratorService:
         return 'general'
 
     @classmethod
+    def clean_studio_title(cls, t_str: str) -> str:
+        """Strip Live, Concert, Live Performance, Rehearsal, Acoustic Live tags to guarantee clean studio version."""
+        if not t_str:
+            return ''
+        cleaned = re.sub(r'[\(\[\{]\s*(?:live performance|live session|live at|live in|live ver|live|concert|acoustic live|rehearsal).*?[\)\]\}]', '', t_str, flags=re.I).strip()
+        cleaned = re.sub(r'\s*-\s*live(?:\s+performance)?\s*$', '', cleaned, flags=re.I).strip()
+        return cleaned if cleaned else t_str
+
+    @classmethod
+    def song_key(cls, artist: str, title: str) -> str:
+        """Unique key for deduplication ignoring case, features, live tags, and punctuation."""
+        c_a = re.sub(r'(?:feat\.|ft\.|,|&).*', '', artist or '', flags=re.I).strip().lower()
+        c_a = re.sub(r'[^\w]', '', c_a)
+        clean_t = cls.clean_studio_title(title or '')
+        c_t = re.sub(r'[\(\[\{].*?[\)\]\}]', '', clean_t).strip().lower()
+        c_t = re.sub(r'[^\w]', '', c_t)
+        return f"{c_a}::{c_t}"
+
+    @classmethod
     def generate_playlist(
         cls,
         prompt: str,
@@ -118,7 +137,19 @@ class AICuratorService:
             setlist_title = res.get('setlist_title', setlist_title)
             vibe_summary = res.get('vibe_summary', vibe_summary)
 
-        # 3. Parallel Metadata Enrichment (Cover Art, Official Duration, Album, Year, DJ Tags)
+        # 3. Deduplicate raw tracks and enforce clean studio titles immediately
+        seen_raw = set()
+        clean_raw = []
+        for t in raw_tracks:
+            clean_t = cls.clean_studio_title(t.get('title', ''))
+            t['title'] = clean_t
+            k = cls.song_key(t.get('artist', ''), clean_t)
+            if k and k != "::" and k not in seen_raw:
+                seen_raw.add(k)
+                clean_raw.append(t)
+        raw_tracks = clean_raw
+
+        # 4. Parallel Metadata Enrichment (Cover Art, Official Duration, Album, Year, DJ Tags)
         from concurrent.futures import ThreadPoolExecutor
         from .spotify_service import SpotifyService
         from .dj_analyzer_service import DJAnalyzerService, CAMELOT_COLORS
@@ -126,32 +157,36 @@ class AICuratorService:
         def enrich_track(item):
             idx, t = item
             artist = t.get('artist', '').strip()
-            title = t.get('title', '').strip()
+            title = cls.clean_studio_title(t.get('title', '').strip())
             q = f"{artist} - {title}".strip(' -')
             match = SpotifyService.search_track(q) or {}
             
-            # If the track wasn't found (likely LLM hallucination or translated title like 'Youngohm - Sao')
-            if not match and artist:
+            # If not found or if match is a live version, recover using Deezer studio catalog
+            is_match_live = any(w in (match.get('title') or '').lower() for w in ['live performance', 'live session', '(live', '[live', 'concert'])
+            if (not match or is_match_live) and artist:
                 try:
-                    # Search Deezer for the real artist's top catalog
                     clean_art = re.sub(r'(?:feat\.|ft\.|,|&).*', '', artist, flags=re.I).strip()
-                    r_art = requests.get(f"https://api.deezer.com/search?q={clean_art}&limit=6", timeout=4)
+                    r_art = requests.get(f"https://api.deezer.com/search?q={clean_art}&limit=10", timeout=4)
                     if r_art.status_code == 200:
                         candidates = r_art.json().get('data', [])
-                        for cand in candidates:
+                        # Exclude live / concert tracks
+                        studio_cands = [c for c in candidates if not any(w in c.get('title', '').lower() for w in ['live', 'concert'])]
+                        best_cands = studio_cands if studio_cands else candidates
+                        for cand in best_cands:
                             c_art = cand.get('artist', {}).get('name', '').strip()
-                            c_title = cand.get('title', '').strip()
-                            # Check if artist matches
+                            c_title = cls.clean_studio_title(cand.get('title', '').strip())
                             if clean_art.lower() in c_art.lower() or c_art.lower() in clean_art.lower():
                                 real_m = SpotifyService.search_track(f"{c_art} - {c_title}")
                                 if real_m:
                                     match = real_m
                                     artist = real_m.get('artist', c_art)
-                                    title = real_m.get('title', c_title)
+                                    title = cls.clean_studio_title(real_m.get('title', c_title))
                                     q = f"{artist} - {title}"
                                     break
                 except Exception:
                     pass
+
+            final_title = cls.clean_studio_title(title if title else (match.get('title') or q))
 
             # Determine or estimate realistic DJ metadata for Smart Mixtape flow
             fallback_genre = 'Indie / Acoustic Chill' if vibe_intent in ('chill', 'cafe') else 'Pop / Hits'
@@ -161,7 +196,7 @@ class AICuratorService:
             bpm = match.get('bpm') or t.get('bpm')
             if not bpm or float(bpm) <= 0:
                 if vibe_intent in ('chill', 'cafe') or 'chill' in genre_lower or 'acoustic' in genre_lower or 'indie' in genre_lower or 'lo-fi' in genre_lower:
-                    bpm = 78.0 + ((idx * 2) % 18)  # 78 - 95 BPM relaxed tempo
+                    bpm = 78.0 + ((idx * 2) % 18)
                 elif 'tech house' in genre_lower or 'techno' in genre_lower or 'edm' in genre_lower:
                     bpm = 126.0 + ((idx * 2) % 6)
                 elif 'house' in genre_lower or 'disco' in genre_lower:
@@ -179,7 +214,7 @@ class AICuratorService:
             if not camelot or camelot in ('--', ''):
                 camelot_keys = ['8A', '9A', '10A', '11A', '12A', '1A', '2A', '3A', '4A', '5A', '6A', '7A',
                                 '8B', '9B', '10B', '11B', '12B', '1B', '2B', '3B', '4B', '5B', '6B', '7B']
-                camelot = camelot_keys[abs(hash(f"{artist}_{title}")) % len(camelot_keys)]
+                camelot = camelot_keys[abs(hash(f"{artist}_{final_title}")) % len(camelot_keys)]
 
             color = CAMELOT_COLORS.get(camelot, '#8b5cf6')
             
@@ -187,14 +222,14 @@ class AICuratorService:
             stars = match.get('stars') or t.get('stars')
             if not stars:
                 if vibe_intent in ('chill', 'cafe'):
-                    stars = 1 + ((idx % 3))  # Keep chill energy at 1-3★, never explosive 5★
+                    stars = 1 + ((idx % 3))
                 else:
                     progress = (idx + 1) / max(len(raw_tracks), 1)
                     stars = max(1, min(5, int(math.ceil(progress * 5))))
 
             return {
                 'id': match.get('id') or f"ai_{idx+1}_{abs(hash(q)) % 100000}",
-                'title': title if title else (match.get('title') or q),
+                'title': final_title,
                 'artist': artist if artist else (match.get('artist') or 'Unknown Artist'),
                 'album': match.get('album') or setlist_title or 'AI Smart Mixtape',
                 'playlist_name': setlist_title,
@@ -204,7 +239,7 @@ class AICuratorService:
                 'cover_url': match.get('cover_url') or '',
                 'year': match.get('year') or '',
                 'track_number': idx + 1,
-                'search_query': q,
+                'search_query': f"{artist} - {final_title}",
                 'vibe_note': t.get('vibe_note', ''),
                 'bpm': round(float(bpm), 1),
                 'camelot': camelot,
@@ -218,10 +253,45 @@ class AICuratorService:
         with ThreadPoolExecutor(max_workers=12) as executor:
             enriched = list(executor.map(enrich_track, enumerate(raw_tracks)))
 
-        # 4. Apply Smart Mixtape Harmonic & Energy Flow Algorithm
+        # 5. Post-Enrichment Deduplication (Guarantees zero duplicate songs)
+        seen_enriched = set()
+        unique_enriched = []
+        for tr in enriched:
+            k = cls.song_key(tr.get('artist', ''), tr.get('title', ''))
+            if k and k != "::" and k not in seen_enriched:
+                seen_enriched.add(k)
+                unique_enriched.append(tr)
+
+        # 6. If deduplication reduced count, fill up with fresh unique tracks from knowledgebase
+        if len(unique_enriched) < count:
+            needed = count - len(unique_enriched)
+            fill_res = cls._builtin_curator(prompt, count * 2, languages=languages, vibe_intent=vibe_intent)
+            fill_pool = fill_res.get('tracks', [])
+            to_enrich = []
+            for ft in fill_pool:
+                clean_ft = cls.clean_studio_title(ft.get('title', ''))
+                ft['title'] = clean_ft
+                k = cls.song_key(ft.get('artist', ''), clean_ft)
+                if k and k != "::" and k not in seen_enriched:
+                    seen_enriched.add(k)
+                    to_enrich.append(ft)
+                    if len(to_enrich) >= needed:
+                        break
+
+            if to_enrich:
+                with ThreadPoolExecutor(max_workers=6) as executor:
+                    extra_enriched = list(executor.map(enrich_track, enumerate(to_enrich, start=len(unique_enriched))))
+                for et in extra_enriched:
+                    unique_enriched.append(et)
+                    if len(unique_enriched) >= count:
+                        break
+
+        final_tracks = unique_enriched[:count]
+
+        # 7. Apply Smart Mixtape Harmonic & Energy Flow Algorithm
         target_mode = mixtape_mode or ('sunset_lounge' if vibe_intent in ('chill', 'cafe') else 'peak_climb')
         sorted_mixtape = DJAnalyzerService.build_smart_mixtape(
-            enriched,
+            final_tracks,
             mode=target_mode,
             randomize=False
         )
@@ -269,6 +339,8 @@ class AICuratorService:
             "2. ORIGINAL THAI TITLES (DO NOT TRANSLATE): If recommending a Thai song, the song title MUST be written in its official Thai script (e.g. 'ธาตุทองซาวด์', 'วายร้าย', 'คิด(แต่ไม่)ถึง', 'เพื่อนเล่น ไม่เล่นเพื่อน', 'โต๊ะริม', 'ทน', 'เฉยเมย'). NEVER translate or romanize Thai titles to English (e.g. NEVER write 'Sao', 'Kiss Me', 'Life Goes On', 'Baddest')!\n"
             "3. ACCURATE ARTIST ATTRIBUTION: The artist MUST be the real performer of that song (e.g. 'Lover Boy' is by Phum Viphurit, NOT JAYLERR; Thai rapper is 'MILLI', NEVER confuse with 80s pop band 'Milli Vanilli').\n"
             "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
+            "5. STUDIO ALBUM MASTERS ONLY (ABSOLUTELY NO LIVE VERSIONS): NEVER select live performances, live recordings, concert versions, acoustic live sessions, or any title containing '(Live)', '(Live Performance)', '(Live Session)', or '(Concert)'. ALL songs must be clean, original official studio album/single master recordings suitable for seamless DJ mixing without crowd noise or speaking.\n"
+            "6. ZERO DUPLICATES (100% UNIQUE TRACKS): Every song in the playlist MUST be completely distinct and unique. NEVER repeat the same song title or a variation of it. Ensure a rich, diverse set of different songs.\n"
         )
 
         system_instruction = (
@@ -293,7 +365,15 @@ class AICuratorService:
             "}"
         )
 
-        user_content = f"Please curate exactly {count} distinct real songs for this request:\n{prompt}\nLanguages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}\nREMINDER: Thai song titles must be in original Thai script (no English translation)."
+        user_content = (
+            f"Please curate exactly {count} distinct real songs for this request:\n{prompt}\n"
+            f"Languages: {', '.join(languages or ['thai', 'english'])}\n"
+            f"Mixtape Mode: {mixtape_mode}\n"
+            "MANDATORY REQUIREMENTS:\n"
+            "- Thai song titles MUST be in original Thai script (no English translations).\n"
+            "- STUDIO ALBUM MASTERS ONLY. Strictly NO Live recordings, NO concert cuts, NO '(Live Performance)'.\n"
+            "- Exactly {count} completely unique songs. Strictly NO DUPLICATES."
+        )
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         body = {
             "contents": [{"parts": [{"text": system_instruction + "\n\n" + user_content}]}],
@@ -337,6 +417,8 @@ class AICuratorService:
             "2. ORIGINAL THAI TITLES (DO NOT TRANSLATE): If recommending a Thai song, the song title MUST be written in its official Thai script (e.g. 'ธาตุทองซาวด์', 'วายร้าย', 'คิด(แต่ไม่)ถึง', 'เพื่อนเล่น ไม่เล่นเพื่อน', 'โต๊ะริม', 'ทน', 'เฉยเมย'). NEVER translate or romanize Thai titles to English (e.g. NEVER write 'Sao', 'Kiss Me', 'Life Goes On', 'Baddest')!\n"
             "3. ACCURATE ARTIST ATTRIBUTION: The artist MUST be the real performer of that song (e.g. 'Lover Boy' is by Phum Viphurit, NOT JAYLERR; Thai rapper is 'MILLI', NEVER confuse with 80s pop band 'Milli Vanilli').\n"
             "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
+            "5. STUDIO ALBUM MASTERS ONLY (ABSOLUTELY NO LIVE VERSIONS): NEVER select live performances, live recordings, concert versions, acoustic live sessions, or any title containing '(Live)', '(Live Performance)', '(Live Session)', or '(Concert)'. ALL songs must be clean, original official studio album/single master recordings suitable for seamless DJ mixing without crowd noise or speaking.\n"
+            "6. ZERO DUPLICATES (100% UNIQUE TRACKS): Every song in the playlist MUST be completely distinct and unique. NEVER repeat the same song title or a variation of it. Ensure a rich, diverse set of different songs.\n"
         )
 
         system_prompt = (
@@ -359,7 +441,7 @@ class AICuratorService:
             "model": "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Recommend {count} tracks for: {prompt}. Languages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}\nREMINDER: Thai song titles must be in original Thai script (no English translation)."}
+                {"role": "user", "content": f"Recommend exactly {count} distinct real studio songs for: {prompt}. Languages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}\nREMINDER: Thai song titles must be in original Thai script (no English translation). No live songs. No duplicate songs."}
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.15
@@ -465,8 +547,10 @@ class AICuratorService:
         deduped = []
         seen = set()
         for t in tracks:
-            key = (t.get('artist', '').strip().lower(), t.get('title', '').strip().lower())
-            if key not in seen and key[0] and key[1]:
+            clean_t = cls.clean_studio_title(t.get('title', ''))
+            t['title'] = clean_t
+            key = cls.song_key(t.get('artist', ''), clean_t)
+            if key and key != "::" and key not in seen:
                 seen.add(key)
                 deduped.append(t)
 
@@ -522,8 +606,10 @@ class AICuratorService:
             for t in pool:
                 if len(deduped) >= count:
                     break
-                key = (t.get('artist', '').strip().lower(), t.get('title', '').strip().lower())
-                if key not in seen:
+                clean_t = cls.clean_studio_title(t.get('title', ''))
+                t['title'] = clean_t
+                key = cls.song_key(t.get('artist', ''), clean_t)
+                if key and key != "::" and key not in seen:
                     seen.add(key)
                     deduped.append(t)
             if len(deduped) >= count:
@@ -536,8 +622,10 @@ class AICuratorService:
             for t in online_tracks:
                 if len(deduped) >= count:
                     break
-                key = (t.get('artist', '').strip().lower(), t.get('title', '').strip().lower())
-                if key not in seen:
+                clean_t = cls.clean_studio_title(t.get('title', ''))
+                t['title'] = clean_t
+                key = cls.song_key(t.get('artist', ''), clean_t)
+                if key and key != "::" and key not in seen:
                     seen.add(key)
                     deduped.append(t)
 

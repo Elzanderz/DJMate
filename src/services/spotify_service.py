@@ -54,7 +54,7 @@ class SpotifyService:
         a_low = (artist or '').lower()
         q_low = (query or '').lower()
 
-        # If user explicitly searched for karaoke or tribute, allow it
+        # If user explicitly searched for karaoke, tribute, or live, allow it
         if 'karaoke' in q_low or 'tribute' in q_low or 'cover' in q_low:
             return False
 
@@ -65,6 +65,12 @@ class SpotifyService:
         ]
         if any(bad in t_low or bad in a_low for bad in bad_phrases):
             return True
+
+        # Reject live recordings unless user explicitly asked for live
+        if 'live' not in q_low and 'concert' not in q_low:
+            live_phrases = ['(live', '[live', 'live performance', 'live session', 'live at', 'live in', 'concert live', 'live version']
+            if any(lp in t_low for lp in live_phrases):
+                return True
 
         # Check artist match if an expected artist was given in query
         if expected_artist:
