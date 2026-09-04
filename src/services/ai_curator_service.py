@@ -66,11 +66,14 @@ class AICuratorService:
 
     @classmethod
     def clean_studio_title(cls, t_str: str) -> str:
-        """Strip Live, Concert, Live Performance, Rehearsal, Acoustic Live tags to guarantee clean studio version."""
+        """Strip Live, Concert, Live Performance, Rehearsal, Karaoke, Fancam tags to guarantee clean studio version."""
         if not t_str:
             return ''
-        cleaned = re.sub(r'[\(\[\{]\s*(?:live performance|live session|live at|live in|live ver|live|concert|acoustic live|rehearsal).*?[\)\]\}]', '', t_str, flags=re.I).strip()
-        cleaned = re.sub(r'\s*-\s*live(?:\s+performance)?\s*$', '', cleaned, flags=re.I).strip()
+        cleaned = re.sub(
+            r'[\(\[\{]\s*(?:live performance|live session|live at|live in|live ver|live|concert|acoustic live|rehearsal|fancam|แฟนแคม|บันทึกการแสดงสด|คาราโอเกะ|karaoke|ดนตรีเปล่า|ตัดเสียงร้อง|cover|คัฟเวอร์|minus\s*one).*?[\)\]\}]',
+            '', t_str, flags=re.I
+        ).strip()
+        cleaned = re.sub(r'\s*-\s*(?:live|concert|karaoke|คาราโอเกะ)(?:\s+performance)?\s*$', '', cleaned, flags=re.I).strip()
         return cleaned if cleaned else t_str
 
     @classmethod
@@ -341,6 +344,7 @@ class AICuratorService:
             "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
             "5. STUDIO ALBUM MASTERS ONLY (ABSOLUTELY NO LIVE VERSIONS): NEVER select live performances, live recordings, concert versions, acoustic live sessions, or any title containing '(Live)', '(Live Performance)', '(Live Session)', or '(Concert)'. ALL songs must be clean, original official studio album/single master recordings suitable for seamless DJ mixing without crowd noise or speaking.\n"
             "6. ZERO DUPLICATES (100% UNIQUE TRACKS): Every song in the playlist MUST be completely distinct and unique. NEVER repeat the same song title or a variation of it. Ensure a rich, diverse set of different songs.\n"
+            "7. STRICTLY NO KARAOKE / NO BACKING TRACKS / NO FANCAMS: NEVER suggest karaoke, minus one, vocal cut, instrumental, fancams, or phone clips. All tracks must be official studio master vocal releases.\n"
         )
 
         system_instruction = (
@@ -371,7 +375,7 @@ class AICuratorService:
             f"Mixtape Mode: {mixtape_mode}\n"
             "MANDATORY REQUIREMENTS:\n"
             "- Thai song titles MUST be in original Thai script (no English translations).\n"
-            "- STUDIO ALBUM MASTERS ONLY. Strictly NO Live recordings, NO concert cuts, NO '(Live Performance)'.\n"
+            "- STUDIO ALBUM MASTERS ONLY. Strictly NO Live recordings, NO concert cuts, NO '(Live Performance)', NO Karaoke, NO Backing tracks.\n"
             "- Exactly {count} completely unique songs. Strictly NO DUPLICATES."
         )
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
@@ -419,6 +423,7 @@ class AICuratorService:
             "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
             "5. STUDIO ALBUM MASTERS ONLY (ABSOLUTELY NO LIVE VERSIONS): NEVER select live performances, live recordings, concert versions, acoustic live sessions, or any title containing '(Live)', '(Live Performance)', '(Live Session)', or '(Concert)'. ALL songs must be clean, original official studio album/single master recordings suitable for seamless DJ mixing without crowd noise or speaking.\n"
             "6. ZERO DUPLICATES (100% UNIQUE TRACKS): Every song in the playlist MUST be completely distinct and unique. NEVER repeat the same song title or a variation of it. Ensure a rich, diverse set of different songs.\n"
+            "7. STRICTLY NO KARAOKE / NO BACKING TRACKS / NO FANCAMS: NEVER suggest karaoke, minus one, vocal cut, instrumental, fancams, or phone clips. All tracks must be official studio master vocal releases.\n"
         )
 
         system_prompt = (
