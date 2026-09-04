@@ -1,7 +1,10 @@
 name: Multiplatform App Build
+run-name: ${{ github.event.head_commit.message || 'Build on main' }}
 
 on:
-  # ปิดการรันอัตโนมัติเมื่อ push - จะรันเฉพาะเมื่อกดสั่งแบบ Manual (Run workflow) เท่านั้น
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
