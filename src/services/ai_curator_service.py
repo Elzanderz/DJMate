@@ -17,13 +17,38 @@ class AICuratorService:
     def _detect_vibe_intent(cls, prompt: str) -> str:
         """Detect the core mood/vibe intent from the prompt."""
         p = (prompt or '').lower()
-        # 1. 3Cha / Morlam / Street Party
-        if any(w in p for w in ['3ช่า', 'สามช่า', 'โจ๊ะ', 'รีมิกซ์', 'สายตื๊ด', 'รถแห่', 'สงกรานต์']):
+        # 1. 3Cha / Morlam / Street Party / สายย่อ
+        if any(w in p for w in ['3ช่า', 'สามช่า', 'โจ๊ะ', 'รีมิกซ์', 'สายตื๊ด', 'รถแห่', 'สงกรานต์', 'สายย่อ']):
             return '3cha'
-        # 2. Peak Club / EDM / Dance / Heavy Party
-        if any(w in p for w in ['club', 'ผับ', 'ตื๊ด', 'เต้น', 'dance', 'edm', 'tech house', 'techno', '128', 'มันส์ๆ', 'เมาๆ', 'ปาร์ตี้มันส์', 'บีทหนัก', 'หนักๆ']):
+        # 2. Rock / Thai Rock / ขาร็อค
+        if any(w in p for w in ['ร็อค', 'rock', 'bodyslam', 'บอดี้สแลม', 'โลโซ', 'loso', 'silly fools', 'clash', 'แคลช', 'big ass', 'บิ๊กแอส', 'ชาวร็อค', 'ขาร็อค']):
+            return 'thai_rock'
+        # 3. 90s / 2000s Hits (Global or Thai)
+        if any(w in p for w in ['สากล 90', 'inter 90', '90s สากล', '90s inter', 'สากลเก่า', 'retro inter', 'สากล 2000']):
+            return 'global_90s'
+        if any(w in p for w in ['90', '90s', "90's", '2000s', 'ยุค 90', 'วัยรุ่น 90', 'เพลงเก่า']):
+            if any(w in p for w in ['สากล', 'อังกฤษ', 'inter', 'english']):
+                return 'global_90s'
+            return 'thai_90s'
+        # 4. TikTok / Viral / Trending / ฮิตติดกระแส
+        if any(w in p for w in ['tiktok', 'ติ๊กต๊อก', 'ติ๊กตอก', 'ไวรัล', 'viral', 'ติดกระแส', 'มาแรง', 'ฮิตใน']):
+            return 'tiktok_viral'
+        # 5. Hip-Hop / Rap
+        if any(w in p for w in ['hip hop', 'hip-hop', 'hiphop', 'ฮิปฮอป', 'แร็พ', 'แรป', 'rap', 'trap', 'drill']):
+            return 'hiphop'
+        # 6. เพื่อชีวิต / ร้านเหล้าเพื่อเพื่อน
+        if any(w in p for w in ['เพื่อชีวิต', 'คาราบาว', 'พงษ์สิทธิ์', 'ปู พงษ์สิทธิ์', 'มาลีฮวนน่า', 'ไททศมิตร', 'taitosmith']):
+            return 'phuecheewit'
+        # 7. K-Pop / เพลงเกาหลี
+        if any(w in p for w in ['k-pop', 'kpop', 'เกาหลี', 'korean', 'newjeans', 'blackpink', 'bts', 'ive', 'aespa', 'le sserafim']):
+            return 'kpop'
+        # 8. J-Pop / City Pop / Anime
+        if any(w in p for w in ['j-pop', 'jpop', 'ญี่ปุ่น', 'japanese', 'anime', 'yoasobi', 'fujii kaze', 'city pop']):
+            return 'jpop'
+        # 9. Peak Club / EDM / Dance / Heavy Party
+        if any(w in p for w in ['club', 'ผับ', 'ตื๊ด', 'เต้น', 'dance', 'edm', 'tech house', 'techno', '128', 'มันส์ๆ', 'เมาๆ', 'ปาร์ตี้มันส์', 'บีทหนัก', 'หนักๆ', 'festival']):
             return 'club_peak'
-        # 3. Explicit Chill / Relax / Acoustic / Slow / Coffee / Cafe / Indie
+        # 10. Explicit Chill / Relax / Acoustic / Slow / Coffee / Cafe / Indie
         if any(w in p for w in [
             'ชิล', 'ชิว', 'ชิลล์', 'chill', 'relax', 'สบาย', 'ฟังสบาย', 'ผ่อนคลาย', 'เบาๆ', 'นุ่มๆ', 'ละมุน',
             'คาเฟ่', 'cafe', 'กาแฟ', 'coffee', 'acoustic', 'อะคูสติก', 'lofi', 'lo-fi', 'neo soul', 'neo-soul',
@@ -31,10 +56,10 @@ class AICuratorService:
             'ก่อนนอน', 'เหงา', 'อกหัก', 'รักหวาน', 'อ่านหนังสือ', 'ทำงาน', 'easy listening', 'slow', 'เพราะๆ'
         ]):
             return 'chill'
-        # 4. Beach / Tropical
+        # 11. Beach / Tropical
         if any(w in p for w in ['beach', 'ทะเล', 'หาด', 'tropical', 'sunset']):
             return 'beach'
-        # 5. Rooftop / Lounge
+        # 12. Rooftop / Lounge
         if any(w in p for w in ['rooftop', 'หรู', 'cocktail', 'lounge', 'ค็อกเทล', 'deep house', 'วิว']):
             return 'rooftop'
         return 'general'
@@ -146,8 +171,8 @@ class AICuratorService:
 
             return {
                 'id': match.get('id') or f"ai_{idx+1}_{abs(hash(q)) % 100000}",
-                'title': match.get('title') or title or q,
-                'artist': match.get('artist') or artist,
+                'title': title if title else (match.get('title') or q),
+                'artist': artist if artist else (match.get('artist') or 'Unknown Artist'),
                 'album': match.get('album') or setlist_title or 'AI Smart Mixtape',
                 'playlist_name': setlist_title,
                 'folder_mode': 'playlist',
@@ -308,56 +333,88 @@ class AICuratorService:
 
     @classmethod
     def _search_live_online(cls, query: str, count: int = 15, vibe_intent: str = 'general') -> List[Dict]:
-        """Live online song discovery matching custom prompts without requiring paid API keys."""
+        """Live online song discovery matching custom prompts using Deezer Curated Playlists & top charts."""
         tracks = []
-        clean_q = re.sub(r'(?:อยากได้|ขอ|เพลง|ร้าน|บรรยากาศ|แนว|สไตล์|คนฟัง|ลูกค้า|เปิด|เซ็ต|ช่วยหา|หน่อย)', ' ', query, flags=re.I)
+        seen = set()
+        clean_q = re.sub(r'(?:อยากได้|ขอ|เพลง|ร้าน|บรรยากาศ|แนว|สไตล์|คนฟัง|ลูกค้า|เปิด|เซ็ต|ช่วยหา|หน่อย|มันส์ๆ|เพราะๆ|ฮิตๆ)', ' ', query, flags=re.I)
         clean_q = ' '.join(clean_q.split()).strip()
-        search_terms = []
-        if vibe_intent in ('chill', 'cafe'):
-            if clean_q:
-                search_terms = [f"{clean_q} Acoustic Chill", f"{clean_q} Indie Pop", clean_q]
-            else:
-                search_terms = ["Thai Indie Chill", "Acoustic Pop Chill", "Cafe Lo-Fi"]
-        else:
-            search_terms = [clean_q, query] if clean_q and len(clean_q) > 2 else [query]
 
-        for st in search_terms:
+        intent_playlist_queries = {
+            'global_90s': ["90s Greatest Hits", "90s Pop Rock Anthems", "2000s Pop Hits"],
+            'thai_90s': ["เพลงไทยยุค 90", "Grammy 90s Hits"],
+            'tiktok_viral': ["TikTok Hits 2024", "Viral Hits 2024", "Top Trending Pop"],
+            'thai_rock': ["เพลงร็อคไทย", "Thai Rock Anthems", "Rock Classics"],
+            'hiphop': ["Hip Hop Classics", "Top Hip Hop Hits", "Rap Workout"],
+            'kpop': ["Top K-Pop", "K-Pop Hits", "K-Pop Trending"],
+            'jpop': ["City Pop", "J-Pop Hits", "Anime Hits"],
+            'club_peak': ["Dance Super Hits", "Club Bangers", "Tech House 2024"],
+            'chill': ["Acoustic Chill", "Coffee Chill Pop", "Indie Chill"],
+            'beach': ["Tropical House", "Sunset Beach Club"],
+            'rooftop': ["Deep House Lounge", "Melodic Techno"],
+            'phuecheewit': ["เพลงเพื่อชีวิต"],
+            '3cha': ["เพลงแดนซ์สงกรานต์", "สายย่อ 3 ช่า"]
+        }
+
+        # 1. Search Deezer Curated Playlists (Guarantees authentic, certified popular songs)
+        st_queries = intent_playlist_queries.get(vibe_intent, [clean_q, query] if clean_q else ["Global Top Hits"])
+        for st in st_queries:
             if not st or len(tracks) >= count:
                 break
-            # 1. Deezer API Live Search
             try:
-                r = requests.get(f"https://api.deezer.com/search?q={st}&limit={count}", timeout=6)
-                if r.status_code == 200:
-                    for d in r.json().get('data', []):
-                        art = d.get('artist', {}).get('name', '')
-                        tit = d.get('title', '')
-                        if art and tit and not any(t['artist'].lower() == art.lower() and t['title'].lower() == tit.lower() for t in tracks):
-                            tracks.append({
-                                'artist': art,
-                                'title': tit,
-                                'genre': 'Acoustic / Indie Chill' if vibe_intent in ('chill', 'cafe') else 'Popular Hit',
-                                'vibe_note': f"เพลงฮิตตรงกับ '{st}'"
-                            })
+                r = requests.get(f"https://api.deezer.com/search/playlist?q={st}&limit=2", timeout=5)
+                if r.status_code == 200 and r.json().get('data'):
+                    for pl in r.json()['data']:
+                        pl_id = pl.get('id')
+                        r2 = requests.get(f"https://api.deezer.com/playlist/{pl_id}/tracks?limit=30", timeout=5)
+                        if r2.status_code == 200:
+                            for d in r2.json().get('data', []):
+                                art = d.get('artist', {}).get('name', '').strip()
+                                tit = d.get('title', '').strip()
+                                if not art or not tit:
+                                    continue
+                                # Filter out generic karaoke, tribute or instrumental spam
+                                bad_words = ['karaoke', 'tribute', 'instrumental cover', 'backing track']
+                                if any(b in art.lower() or b in tit.lower() for b in bad_words):
+                                    continue
+                                key = (art.lower(), tit.lower())
+                                if key not in seen:
+                                    seen.add(key)
+                                    tracks.append({
+                                        'artist': art,
+                                        'title': tit,
+                                        'genre': 'Curated Hit',
+                                        'vibe_note': f"เพลงฮิตจากเพลย์ลิสต์ {pl.get('title')}"
+                                    })
+                                if len(tracks) >= count:
+                                    break
+                        if len(tracks) >= count:
+                            break
             except Exception:
                 pass
 
-            # 2. iTunes API Live Search
-            if len(tracks) < count:
-                try:
-                    r2 = requests.get(f"https://itunes.apple.com/search?term={st}&entity=song&limit={count}", timeout=6)
-                    if r2.status_code == 200:
-                        for item in r2.json().get('results', []):
-                            art = item.get('artistName', '')
-                            tit = item.get('trackName', '')
-                            if art and tit and not any(t['artist'].lower() == art.lower() and t['title'].lower() == tit.lower() for t in tracks):
-                                tracks.append({
-                                    'artist': art,
-                                    'title': tit,
-                                    'genre': 'Acoustic / Indie Chill' if vibe_intent in ('chill', 'cafe') else item.get('primaryGenreName', 'Pop'),
-                                    'vibe_note': f"แนะนำสำหรับ '{st}'"
-                                })
-                except Exception:
-                    pass
+        # 2. iTunes Public API Fallback for specific artist/title terms
+        if len(tracks) < count and clean_q and len(clean_q) > 2:
+            try:
+                r2 = requests.get(f"https://itunes.apple.com/search?term={clean_q}&entity=song&limit={count}", timeout=5)
+                if r2.status_code == 200:
+                    for item in r2.json().get('results', []):
+                        art = item.get('artistName', '').strip()
+                        tit = item.get('trackName', '').strip()
+                        if not art or not tit:
+                            continue
+                        key = (art.lower(), tit.lower())
+                        if key not in seen:
+                            seen.add(key)
+                            tracks.append({
+                                'artist': art,
+                                'title': tit,
+                                'genre': item.get('primaryGenreName', 'Pop'),
+                                'vibe_note': f"ค้นพบตรงกับ '{clean_q}'"
+                            })
+                        if len(tracks) >= count:
+                            break
+            except Exception:
+                pass
 
         return tracks[:count]
 
@@ -381,17 +438,40 @@ class AICuratorService:
         is_english = ('english' in languages)
 
         if vibe_intent in ('chill', 'cafe'):
-            if is_english:
+            if is_english and 'cafe' in vibe_presets:
                 sister_pools.append(vibe_presets['cafe']['tracks'])
-                sister_pools.append(vibe_presets['beach']['tracks'])
-            if is_thai:
+            if is_thai and 'thai_chill' in vibe_presets:
                 sister_pools.append(vibe_presets['thai_chill']['tracks'])
+        elif vibe_intent == 'thai_rock':
+            if 'thai_rock' in vibe_presets:
+                sister_pools.append(vibe_presets['thai_rock']['tracks'])
+            if 'thai_90s' in vibe_presets:
+                sister_pools.append(vibe_presets['thai_90s']['tracks'])
+        elif vibe_intent in ('global_90s', 'thai_90s'):
+            if 'global_90s' in vibe_presets:
+                sister_pools.append(vibe_presets['global_90s']['tracks'])
+            if 'thai_90s' in vibe_presets:
+                sister_pools.append(vibe_presets['thai_90s']['tracks'])
+        elif vibe_intent == 'tiktok_viral':
+            if 'tiktok_viral' in vibe_presets:
+                sister_pools.append(vibe_presets['tiktok_viral']['tracks'])
+            if 'thai_genz_mala' in vibe_presets:
                 sister_pools.append(vibe_presets['thai_genz_mala']['tracks'])
+        elif vibe_intent == 'hiphop':
+            if 'hiphop' in vibe_presets:
+                sister_pools.append(vibe_presets['hiphop']['tracks'])
+            if 'club_peak' in vibe_presets:
+                sister_pools.append(vibe_presets['club_peak']['tracks'])
+        elif vibe_intent == 'phuecheewit':
+            if 'phuecheewit' in vibe_presets:
+                sister_pools.append(vibe_presets['phuecheewit']['tracks'])
+            if 'thai_rock' in vibe_presets:
+                sister_pools.append(vibe_presets['thai_rock']['tracks'])
         elif vibe_intent in ('club_peak', '3cha'):
-            if is_thai:
+            if is_thai and 'thai_party_3cha' in vibe_presets:
                 sister_pools.append(vibe_presets['thai_party_3cha']['tracks'])
-            sister_pools.append(vibe_presets['club_peak']['tracks'])
-            sister_pools.append(vibe_presets['rooftop']['tracks'])
+            if 'club_peak' in vibe_presets:
+                sister_pools.append(vibe_presets['club_peak']['tracks'])
         else:
             for p_key, p_val in vibe_presets.items():
                 if p_key != target_name:
@@ -408,7 +488,7 @@ class AICuratorService:
             if len(deduped) >= count:
                 break
 
-        # 2. If still less than count, use live online search (Deezer / iTunes free API)
+        # 2. If still less than count, query curated live playlist discovery
         if len(deduped) < count:
             needed = count - len(deduped)
             online_tracks = cls._search_live_online(prompt or target_name, count=needed + 10, vibe_intent=vibe_intent)
@@ -596,22 +676,154 @@ class AICuratorService:
                     {"artist": "A-Lin", "title": "A Kind of Sorrow", "genre": "Mandopop", "vibe_note": "บทเพลงเศร้าซึ้งกินใจ"}
                 ]
             },
-            'thai_party_3cha': {
-                'title': '🚗 3ช่า & Thai Party Club (โจ๊ะๆ มันส์ๆ)',
-                'summary': 'เพลง 3ช่า รีมิกซ์ และฮิปฮอปไทยมันส์ๆ สำหรับปาร์ตี้และผับไทย',
+            'tiktok_viral': {
+                'title': '📱 TikTok & Trending Viral Hits',
+                'summary': 'รวมเพลงฮิตติดกระแส TikTok, Reels และ Short ชาร์ตเพลงไวรัลยอดนิยม',
                 'tracks': [
-                    {"artist": "ขันที (Khan-T)", "title": "ตามองตา (Eye's 3Cha Remix)", "genre": "3Cha Dance", "vibe_note": "จังหวะโจ๊ะคลาสสิก"},
-                    {"artist": "โจอี้ บอย", "title": "กะหล่ำปลี", "genre": "Thai Hip-Hop", "vibe_note": "สายตลก สนุกสนาน"},
-                    {"artist": "Youngohm", "title": "ธาตุทองซาวด์", "genre": "Thai Hip-Hop", "vibe_note": "ฮิตติดผับทั่วประเทศ"},
-                    {"artist": "F.HERO, MILLI", "title": "Mirror Mirror", "genre": "Thai Hip-Hop", "vibe_note": "แร็ปดุเดือด เพิ่มความมันส์"},
-                    {"artist": "แจ๊ส สปุ๊กนิค ปาปิยอง กุ๊กกุ๊ก", "title": "แว้นฟ้อหล่อเฟี้ยว", "genre": "Thai Party", "vibe_note": "เต้นยับ สนุกสนาน"},
-                    {"artist": "D GERRARD", "title": "Galaxy", "genre": "Thai R&B", "vibe_note": "กรูฟเท่ๆ ชวนโยก"},
-                    {"artist": "UrboyTJ", "title": "วายร้าย (Villain)", "genre": "Thai Hip-Hop", "vibe_note": "เพลงประจำสายตี้"},
-                    {"artist": "SPRITE, GUYGEEGEE", "title": "ทน", "genre": "Thai Hip-Hop", "vibe_note": "เพลงไทยระดับชาร์ตโลก"},
-                    {"artist": "ยังโอม", "title": "เฉียบคะนอง", "genre": "Thai Hip-Hop", "vibe_note": "เบสแน่น เต้นสนุก"},
-                    {"artist": "โจอี้ บอย", "title": "ลอยทะเล", "genre": "3Cha Pop", "vibe_note": "เพลงเต้นระดับตำนาน"},
-                    {"artist": "แจ๊ส สปุ๊กนิค ปาปิยอง กุ๊กกุ๊ก", "title": "มือลั่น", "genre": "Thai Party", "vibe_note": "ร้องตามได้ทั้งงาน"},
-                    {"artist": "F.HERO", "title": "จำเก่ง", "genre": "Thai Hip-Hop", "vibe_note": "กรูฟสนุกสนาน"}
+                    {"artist": "ROSÉ, Bruno Mars", "title": "APT.", "genre": "Pop Rock", "vibe_note": "เพลงฮิตไวรัลอันดับ 1 ทั่วโลก"},
+                    {"artist": "Sabrina Carpenter", "title": "Espresso", "genre": "Nu-Disco / Pop", "vibe_note": "เพลงฮิตยอดวิวถล่มทลาย จังหวะสนุก"},
+                    {"artist": "Billie Eilish", "title": "BIRDS OF A FEATHER", "genre": "Indie Pop", "vibe_note": "เพลงรักไวรัล ละมุนติดหู"},
+                    {"artist": "Benson Boone", "title": "Beautiful Things", "genre": "Pop Rock", "vibe_note": "ท่อนฮุคพลังเสียงสุดไวรัล"},
+                    {"artist": "Chappell Roan", "title": "Good Luck, Babe!", "genre": "Synth Pop", "vibe_note": "เพลงฮิตมาแรงขวัญใจชาวโซเชียล"},
+                    {"artist": "Tate McRae", "title": "greedy", "genre": "Dance Pop", "vibe_note": "จังหวะแดนซ์สุดเฟียซ เต้นตามทั่ว TikTok"},
+                    {"artist": "Tyla", "title": "Water", "genre": "Amapiano / Afrobeats", "vibe_note": "แดนซ์ชาเลนจ์ระดับโลก"},
+                    {"artist": "Doja Cat", "title": "Paint The Town Red", "genre": "Hip Hop / Pop", "vibe_note": "บีทแซมเปิลแจ๊สสุดติดหู"},
+                    {"artist": "Taylor Swift", "title": "Cruel Summer", "genre": "Synth Pop", "vibe_note": "เพลงชาติหน้าร้อน ร้องตามกันได้ทุกคน"},
+                    {"artist": "FIFTY FIFTY", "title": "Cupid (Twin Ver.)", "genre": "Bubblegum Pop", "vibe_note": "เพลงไวรัลน่ารักฟังสบาย"},
+                    {"artist": "Fellow Fellow", "title": "ดาวหางฮัลเลย์", "genre": "Thai Pop", "vibe_note": "เพลงรักยอดฮิตประจำงานแต่งและ TikTok"},
+                    {"artist": "Three Man Down", "title": "ข้างกัน (City)", "genre": "Thai Indie", "vibe_note": "เพลงรักโรแมนติกที่ทุกคนเปิดคลอ"},
+                    {"artist": "NONT TANONT", "title": "โต๊ะริม (melt)", "genre": "Thai Pop", "vibe_note": "เพลงฮิตติดหู ร้องตามง่าย"},
+                    {"artist": "PiXXiE", "title": "เกินต้าน (Too Cute)", "genre": "T-Pop", "vibe_note": "เพลงชาเลนจ์เต้นสุดคิ้วท์"},
+                    {"artist": "THE TOYS", "title": "ซูลูปาก้า ตาปาเฮ้", "genre": "Thai Pop", "vibe_note": "เพลงไวรัลติดหูข้ามปี"},
+                    {"artist": "Chrrissa Chotirasnisakorn", "title": "เลือดกรุ๊ปบี (B Blood Type)", "genre": "Thai Pop", "vibe_note": "เพลงไวรัลของคนโสดทั่วไทย"},
+                    {"artist": "Bonnadol", "title": "ฉลามชอบงับคุณ", "genre": "Acoustic Pop", "vibe_note": "ไวรัลน่ารักยอดฮิต"},
+                    {"artist": "BADMIXER", "title": "ฟ้ารักพ่อ (DILF)", "genre": "Thai Dance Pop", "vibe_note": "เพลงสนุกสนาน เต้นกระจาย"},
+                    {"artist": "Billkin", "title": "ชอบตัวเองตอนอยู่กับเธอ", "genre": "Thai Pop", "vibe_note": "เพลงรักฟีลกู้ด ยิ้มตามง่าย"},
+                    {"artist": "Bowkylion", "title": "บานปลาย", "genre": "Thai Pop", "vibe_note": "เพลงฮิตเปิดวนซ้ำในทุกแพลตฟอร์ม"},
+                    {"artist": "Serious Bacon", "title": "พี่ๆ ตัดแว่นให้หน่อย", "genre": "Acoustic Pop", "vibe_note": "เสียงร้องใส กรูฟน่ารัก"},
+                    {"artist": "Jeff Satur", "title": "ซ่อน(ไม่)หา (Ghost)", "genre": "Thai Pop / R&B", "vibe_note": "ท่อนฮุคพลังเสียงสุดไวรัล"},
+                    {"artist": "NewJeans", "title": "Super Shy", "genre": "Jersey Club Pop", "vibe_note": "ท่าเต้นยอดนิยมทั่วโลก"},
+                    {"artist": "Jung Kook, Latto", "title": "Seven", "genre": "UK Garage / Pop", "vibe_note": "เพลงฮิตทั่วโลก จังหวะน่ารัก"}
+                ]
+            },
+            'thai_rock': {
+                'title': '🎸 ตำนานเพลงร็อคไทย (Thai Rock Anthems)',
+                'summary': 'รวมเพลงร็อคไทยระดับตำนาน ร้องตามได้ทุกคำ Bodyslam, Silly Fools, Big Ass, Clash, Loso',
+                'tracks': [
+                    {"artist": "Silly Fools", "title": "จิ๊จ๊ะ", "genre": "Thai Rock", "vibe_note": "เพลงร็อคชาติไทย โยกหัวสุดมันส์"},
+                    {"artist": "Silly Fools", "title": "น้ำลาย", "genre": "Thai Rock", "vibe_note": "ท่อนริฟฟ์กีตาร์สุดจัดจ้าน"},
+                    {"artist": "Bodyslam", "title": "แสงสุดท้าย", "genre": "Thai Rock", "vibe_note": "เพลงร็อคปลุกพลังใจ ร้องตามทั้งร้าน"},
+                    {"artist": "Bodyslam", "title": "ยาพิษ", "genre": "Thai Rock", "vibe_note": "ท่อนอินโทรระดับตำนาน"},
+                    {"artist": "Bodyslam", "title": "ความเชื่อ (feat. แอ๊ด คาราบาว)", "genre": "Thai Rock", "vibe_note": "เพลงชาติคนสู้ชีวิต"},
+                    {"artist": "Big Ass", "title": "เล่นของสูง", "genre": "Thai Rock", "vibe_note": "เพลงร็อคที่ทุกคนกระโดดพร้อมกัน"},
+                    {"artist": "Big Ass", "title": "ขี้หึง", "genre": "Thai Rock", "vibe_note": "ริฟฟ์ร็อคมันส์โดนใจ"},
+                    {"artist": "Clash", "title": "เธอจะอยู่กับฉันตลอดไป", "genre": "Thai Rock", "vibe_note": "เพลงร็อคช้าซึ้งทรงพลัง"},
+                    {"artist": "Clash", "title": "ขอเช็ดน้ำตา", "genre": "Thai Rock", "vibe_note": "ร็อคบัลลาดระดับตำนาน"},
+                    {"artist": "Loso", "title": "ซมซาน", "genre": "Thai Rock", "vibe_note": "เพลงชาติร้านเหล้า ร้องได้ทุกคน"},
+                    {"artist": "Loso", "title": "ใจสั่งมา", "genre": "Thai Rock", "vibe_note": "เพลงอกหักตลอดกาล"},
+                    {"artist": "Potato", "title": "ที่เดิม", "genre": "Thai Rock", "vibe_note": "เพลงร็อคมันส์ ร้องตามง่าย"},
+                    {"artist": "Potato", "title": "ขอบคุณที่รักกัน", "genre": "Thai Rock", "vibe_note": "เพลงขอบคุณสุดซึ้ง"},
+                    {"artist": "Labanoon", "title": "เชือกวิเศษ", "genre": "Thai Rock", "vibe_note": "เพลง 500 ล้านวิวที่ทุกคนร้องตาม"},
+                    {"artist": "Labanoon", "title": "ยาม", "genre": "Thai Rock", "vibe_note": "จังหวะโจ๊ะๆ โยกตามสนุก"},
+                    {"artist": "Sweet Mullet", "title": "สภาวะหัวใจล้มเหลวเฉียบพลัน", "genre": "Thai Post-Hardcore", "vibe_note": "ร็อคหนักแน่น สับคอร์ดมันส์"},
+                    {"artist": "Retrospect", "title": "ไม่มีเธอ", "genre": "Thai Rock", "vibe_note": "ร็อคเข้มข้น อารมณ์ดุดัน"},
+                    {"artist": "Paradox", "title": "ฤดูร้อน", "genre": "Thai Rock", "vibe_note": "เพลงชาติหน้าร้อน กระโดดมันส์"},
+                    {"artist": "Paradox", "title": "Sexy", "genre": "Thai Rock", "vibe_note": "จังหวะกวนๆ สนุกสนาน"},
+                    {"artist": "Zeal", "title": "สองรัก", "genre": "Thai Rock", "vibe_note": "เพลงอกหักเจ็บแสบ ร้องตะโกนสุดเสียง"},
+                    {"artist": "Slot Machine", "title": "ผ่าน", "genre": "Thai Modern Rock", "vibe_note": "ปลุกพลังบวก เมโลดี้ติดหู"},
+                    {"artist": "Cocktail", "title": "คุกเข่า", "genre": "Thai Rock", "vibe_note": "เพลงร็อคออร์เคสตราสุดอลังการ"},
+                    {"artist": "Lomosonic", "title": "ขอ", "genre": "Thai Rock", "vibe_note": "กระชากอารมณ์ ร้องตามน้ำตาซึม"}
+                ]
+            },
+            'global_90s': {
+                'title': '📻 ย้อนวันวานสากล 90s & 2000s Pop/Rock Hits',
+                'summary': 'สุดยอดเพลงฮิตสากลยุค 90s - 2000s ที่ทุกคนคุ้นเคยและคิดถึง',
+                'tracks': [
+                    {"artist": "Backstreet Boys", "title": "I Want It That Way", "genre": "90s Pop", "vibe_note": "เพลงป๊อปบอยแบนด์อันดับ 1 ตลอดกาล"},
+                    {"artist": "Britney Spears", "title": "...Baby One More Time", "genre": "90s Pop", "vibe_note": "เพลงชาติทีนป๊อปยุค 90s"},
+                    {"artist": "Nirvana", "title": "Smells Like Teen Spirit", "genre": "Grunge Rock", "vibe_note": "เพลงร็อคกรันจ์เปลี่ยนโลก"},
+                    {"artist": "Oasis", "title": "Wonderwall", "genre": "Britpop", "vibe_note": "เพลงร้องตามอันดับ 1 ของโลก"},
+                    {"artist": "Green Day", "title": "Basket Case", "genre": "Punk Rock", "vibe_note": "พังก์ร็อคพลังล้น มันส์กระโดด"},
+                    {"artist": "Linkin Park", "title": "In the End", "genre": "Nu-Metal", "vibe_note": "ท่อนเปียโนและท่อนแร็พระดับตำนาน"},
+                    {"artist": "Westlife", "title": "My Love", "genre": "Pop Ballad", "vibe_note": "เพลงรักซึ้งอมตะยุค 2000s"},
+                    {"artist": "Blink-182", "title": "All the Small Things", "genre": "Pop Punk", "vibe_note": "สนุกสนาน โยกหัวตามง่าย"},
+                    {"artist": "Spice Girls", "title": "Wannabe", "genre": "Girl Power Pop", "vibe_note": "เพลงแดนซ์เกิร์ลกรุ๊ปสุดไอคอนิก"},
+                    {"artist": "Michael Jackson", "title": "Black or White", "genre": "Pop / Rock", "vibe_note": "ตำนานราชาเพลงป๊อป"},
+                    {"artist": "Savage Garden", "title": "Truly Madly Deeply", "genre": "Pop / Ballad", "vibe_note": "หวานซึ้ง อบอุ่นหัวใจ"},
+                    {"artist": "TLC", "title": "No Scrubs", "genre": "90s R&B", "vibe_note": "กรูฟ R&B สุดคูล"},
+                    {"artist": "Goo Goo Dolls", "title": "Iris", "genre": "Alternative Rock", "vibe_note": "เพลงร็อคบัลลาดซึ้งกินใจ"},
+                    {"artist": "Radiohead", "title": "Creep", "genre": "Alternative Rock", "vibe_note": "เพลงชาติคนแอบรัก"},
+                    {"artist": "The Cranberries", "title": "Zombie", "genre": "Alternative Rock", "vibe_note": "พลังเสียงและริฟฟ์กีตาร์อันเป็นตำนาน"},
+                    {"artist": "No Doubt", "title": "Don't Speak", "genre": "Ska Pop", "vibe_note": "เพลงอกหักคลาสสิก"},
+                    {"artist": "Aerosmith", "title": "I Don't Want to Miss a Thing", "genre": "Hard Rock / Ballad", "vibe_note": "เพลงรักภาพยนตร์ Armageddon"},
+                    {"artist": "Bon Jovi", "title": "It's My Life", "genre": "Hard Rock", "vibe_note": "เพลงร็อคปลุกใจระดับสากล"},
+                    {"artist": "Sixpence None the Richer", "title": "Kiss Me", "genre": "Acoustic Pop", "vibe_note": "ฟังสบาย สดใส น่ารัก"},
+                    {"artist": "Natalie Imbruglia", "title": "Torn", "genre": "Pop Rock", "vibe_note": "เพลงป๊อปร็อคฟังสบายตลอดกาล"}
+                ]
+            },
+            'thai_90s': {
+                'title': '📼 ย้อนยุคเพลงไทย 90s & 2000s (Classic Grammy / RS)',
+                'summary': 'เพลงฮิตยุคเทปคาสเซ็ท แดนซ์และป๊อปร็อคสุดคิดถึง ยุคทองเพลงไทย',
+                'tracks': [
+                    {"artist": "D2B", "title": "ซ่าส์...(สั่นๆ)", "genre": "Thai Pop", "vibe_note": "บอยแบนด์อันดับ 1 ยุค 2000"},
+                    {"artist": "Raptor", "title": "เกรงใจ", "genre": "Thai Pop Dance", "vibe_note": "ท่าเต้นโหนรถเมล์ระดับตำนาน"},
+                    {"artist": "Tata Young", "title": "โอ๊ะ...โอ๊ย", "genre": "Thai Pop", "vibe_note": "สาวน้อยมหัศจรรย์ยุค 90"},
+                    {"artist": "Mos Patiparn", "title": "เหลวไหล", "genre": "Thai Pop", "vibe_note": "เพลงสนุก สดใส ยิ้มตามง่าย"},
+                    {"artist": "Nicole Theriault", "title": "กะโปโล", "genre": "Thai Pop", "vibe_note": "เพลงน่ารักสดใสยุคตลับเทป"},
+                    {"artist": "Loso", "title": "ซมซาน", "genre": "Thai Rock", "vibe_note": "ตำนานร็อคยุค 90"},
+                    {"artist": "Palmy", "title": "อยากร้องดังดัง", "genre": "Thai Pop", "vibe_note": "เพลงสร้างพลังบวก ร้องตามได้ทันที"},
+                    {"artist": "Asanee & Wasan", "title": "ยินยอม", "genre": "Thai Classic Rock", "vibe_note": "เพลงรักระดับตำนานของไทย"},
+                    {"artist": "Nuvo", "title": "สุดสุดไปเลย", "genre": "Thai Pop Rock", "vibe_note": "ดนตรีสนุกสนาน สไตล์นูโว"},
+                    {"artist": "Bird Thongchai", "title": "พริกขี้หนู", "genre": "Thai Pop", "vibe_note": "เพลงแดนซ์พี่เบิร์ดยอดนิยมตลอดกาล"},
+                    {"artist": "Tik Shiro", "title": "มนุษย์ค้างคาว", "genre": "Thai Dance", "vibe_note": "จังหวะเต้นสนุก ไม่มีวันเอ้าท์"},
+                    {"artist": "Lift & Oil", "title": "รมณ์บ่จอย", "genre": "Thai Pop", "vibe_note": "ดูโอ้สุดฮิตยุค 90"},
+                    {"artist": "James Ruangsak", "title": "ข้าวมันไก่", "genre": "Thai Pop", "vibe_note": "เพลงแดนซ์ไวรัลยุค 90"},
+                    {"artist": "Blackhead", "title": "ฉันอยู่ตรงนี้", "genre": "Thai Rock", "vibe_note": "เพลงร็อคซึ้งกินใจ"},
+                    {"artist": "Fly", "title": "บิน", "genre": "Thai Rock", "vibe_note": "ร็อคโจ๊ะๆ สนุกมันส์"},
+                    {"artist": "Christina Aguilar", "title": "พูดอีกที", "genre": "Thai Dance Pop", "vibe_note": "ราชินีแดนซ์เมืองไทย"},
+                    {"artist": "J Jetrin", "title": "ฝากเลี้ยง", "genre": "Thai Rap Dance", "vibe_note": "ตำนานแร็พแดนซ์ยุคแรกของไทย"}
+                ]
+            },
+            'hiphop': {
+                'title': '🎤 Hip-Hop & Rap Bangers (ไทย & สากล)',
+                'summary': 'เพลงแร็พและฮิปฮอปสุดเดือด กรูฟหนักแน่น บีทกระแทกใจ',
+                'tracks': [
+                    {"artist": "Youngohm", "title": "ธาตุทองซาวด์ (feat. SONOFO)", "genre": "Thai Hip-Hop", "vibe_note": "เพลงฮิปฮอปยอดฮิตทั่วเมืองไทย"},
+                    {"artist": "Youngohm", "title": "เฉยเมย", "genre": "Thai Hip-Hop", "vibe_note": "เพลงแจ้งเกิด บีทชิลล์ติดหู"},
+                    {"artist": "UrboyTJ", "title": "วายร้าย (Villain)", "genre": "Thai R&B / Rap", "vibe_note": "กรูฟ R&B ฮิปฮอปสุดละมุน"},
+                    {"artist": "1MILL", "title": "CAN'T TELL ME NUTTIN", "genre": "Thai Trap", "vibe_note": "แทร็ปดุดัน สไตล์รุ่นใหม่"},
+                    {"artist": "SPRITE, GUYGEEGEE", "title": "ทน", "genre": "Thai Hip-Hop", "vibe_note": "เพลงไทยเพลงแรกติด Billboard Global"},
+                    {"artist": "SARAN", "title": "ลืมแทบไม่ไหว (feat. Maimhon)", "genre": "Thai Melodic Rap", "vibe_note": "แร็พบัลลาดเนื้อหากระแทกใจ"},
+                    {"artist": "F.HERO", "title": "จำเก่ง (feat. Tilly Birds)", "genre": "Thai Rap Pop", "vibe_note": "ท่อนแร็พคมคาย เมโลดี้ไพเราะ"},
+                    {"artist": "D GERRARD", "title": "Galaxy (feat. Maiyarap)", "genre": "Thai Neo-Soul / Rap", "vibe_note": "กรูฟฟังสบาย ละมุนหู"},
+                    {"artist": "Kendrick Lamar", "title": "Not Like Us", "genre": "Hip Hop", "vibe_note": "แทร็กแร็พแห่งปี บีทหนักสะใจ"},
+                    {"artist": "Travis Scott", "title": "SICKO MODE", "genre": "Trap", "vibe_note": "การเปลี่ยนบีทสุดล้ำ ระเบิดพลัง"},
+                    {"artist": "Eminem", "title": "Lose Yourself", "genre": "Hip Hop", "vibe_note": "เพลงแร็พอันดับ 1 ตลอดกาล"},
+                    {"artist": "Dr. Dre, Snoop Dogg", "title": "Still D.R.E.", "genre": "West Coast Rap", "vibe_note": "เสียงเปียโนและกรูฟคลาสสิก"},
+                    {"artist": "50 Cent", "title": "In Da Club", "genre": "Hip Hop", "vibe_note": "บีทประจำปาร์ตี้ทั่วโลก"},
+                    {"artist": "Drake", "title": "God's Plan", "genre": "Hip Hop", "vibe_note": "เพลงฮิตฟังเพลิน ฟีลกู้ด"},
+                    {"artist": "Post Malone", "title": "rockstar (feat. 21 Savage)", "genre": "Trap Pop", "vibe_note": "เมโลดี้หม่นเท่ บีทหนัก"},
+                    {"artist": "Jack Harlow", "title": "Lovin On Me", "genre": "Hip Hop", "vibe_note": "บีทแซมเปิลสนุก เต้นตามง่าย"}
+                ]
+            },
+            'phuecheewit': {
+                'title': '🌾 เพลงเพื่อชีวิตระดับตำนาน (Thai Country Rock / Folk)',
+                'summary': 'เพลงเพื่อชีวิตอมตะ คาราบาว, พงษ์สิทธิ์ คำภีร์, มาลีฮวนน่า, ไททศมิตร',
+                'tracks': [
+                    {"artist": "พงษ์สิทธิ์ คำภีร์", "title": "รักเดียว", "genre": "เพื่อชีวิต", "vibe_note": "เพลงรักเพื่อชีวิตอันดับ 1 ที่ทุกคนร้องได้"},
+                    {"artist": "พงษ์สิทธิ์ คำภีร์", "title": "ตลอดเวลา", "genre": "เพื่อชีวิต", "vibe_note": "เพลงอะคูสติกสุดซึ้งและคลาสสิก"},
+                    {"artist": "พงษ์สิทธิ์ คำภีร์", "title": "หนุ่มน้อย", "genre": "เพื่อชีวิต", "vibe_note": "เนื้อหากระแทกใจคนฟัง"},
+                    {"artist": "คาราบาว", "title": "วณิพก", "genre": "เพื่อชีวิต / สามช่า", "vibe_note": "จังหวะสามช่าระดับตำนาน โยกตามมันส์"},
+                    {"artist": "คาราบาว", "title": "บัวลอย", "genre": "เพื่อชีวิต / ร็อค", "vibe_note": "เพลงปิดท้ายคอนเสิร์ต ร็อคมันส์เดือด"},
+                    {"artist": "คาราบาว", "title": "ทะเลใจ", "genre": "เพื่อชีวิต", "vibe_note": "เพลงให้กำลังใจ ปลอบประโลมชีวิต"},
+                    {"artist": "TaitosmitH", "title": "แดงกับเขียว", "genre": "เพื่อชีวิตรุ่นใหม่", "vibe_note": "เพลงร็อคเพื่อชีวิตยุคใหม่สุดเดือด"},
+                    {"artist": "TaitosmitH", "title": "Hello Mama", "genre": "เพื่อชีวิตรุ่นใหม่", "vibe_note": "เพลงคิดถึงบ้าน สะเทือนอารมณ์"},
+                    {"artist": "มาลีฮวนน่า", "title": "แสงจันทร์", "genre": "โฟล์ค / เพื่อชีวิต", "vibe_note": "บทกวีเคล้าเสียงกีตาร์โปร่ง อารมณ์ลึกซึ้ง"},
+                    {"artist": "มาลีฮวนน่า", "title": "หัวใจละเหี่ย", "genre": "เพื่อชีวิต", "vibe_note": "ดนตรีโฟล์คภาคใต้เอกลักษณ์เฉพาะตัว"},
+                    {"artist": "พงษ์เทพ กระโดนชำนาญ", "title": "ตังเก", "genre": "เพื่อชีวิต", "vibe_note": "จังหวะสนุกสนาน ฟังสบาย"},
+                    {"artist": "เสก โลโซ", "title": "มอ'ไซค์รับจ้าง", "genre": "ร็อคเพื่อชีวิต", "vibe_note": "จังหวะสามช่าร็อคมันส์ ร้องตามง่าย"},
+                    {"artist": "คาราบาว", "title": "แม่สาย", "genre": "เพื่อชีวิต", "vibe_note": "เสียงโซโล่กีตาร์หวานปนเศร้า"},
+                    {"artist": "ซูซู", "title": "มยุรา", "genre": "เพื่อชีวิต", "vibe_note": "จังหวะสนุกสนาน ชวนเต้น"}
                 ]
             },
             'beach': {
@@ -677,24 +889,71 @@ class AICuratorService:
                     {"artist": "Skrillex, Fred again.., Flowdan", "title": "Rumble", "genre": "Bass / UKG", "vibe_note": "ดรอปเบสหนักสะใจ"},
                     {"artist": "Alok, Dynoro", "title": "On & On", "genre": "Slap House", "vibe_note": "เบสเด้งหนักแน่น"}
                 ]
+            },
+            'thai_party_3cha': {
+                'title': '🚗 3ช่า & Thai Party Club (โจ๊ะๆ มันส์ๆ)',
+                'summary': 'เพลง 3ช่า รีมิกซ์ และฮิปฮอปไทยมันส์ๆ สำหรับปาร์ตี้และผับไทย',
+                'tracks': [
+                    {"artist": "ขันที (Khan-T)", "title": "ตามองตา (Eye's 3Cha Remix)", "genre": "3Cha Dance", "vibe_note": "จังหวะโจ๊ะคลาสสิก"},
+                    {"artist": "โจอี้ บอย", "title": "กะหล่ำปลี", "genre": "Thai Hip-Hop", "vibe_note": "สายตลก สนุกสนาน"},
+                    {"artist": "Youngohm", "title": "ธาตุทองซาวด์", "genre": "Thai Hip-Hop", "vibe_note": "ฮิตติดผับทั่วประเทศ"},
+                    {"artist": "F.HERO, MILLI", "title": "Mirror Mirror", "genre": "Thai Hip-Hop", "vibe_note": "แร็ปดุเดือด เพิ่มความมันส์"},
+                    {"artist": "แจ๊ส สปุ๊กนิค ปาปิยอง กุ๊กกุ๊ก", "title": "แว้นฟ้อหล่อเฟี้ยว", "genre": "Thai Party", "vibe_note": "เต้นยับ สนุกสนาน"},
+                    {"artist": "D GERRARD", "title": "Galaxy", "genre": "Thai R&B", "vibe_note": "กรูฟเท่ๆ ชวนโยก"},
+                    {"artist": "UrboyTJ", "title": "วายร้าย (Villain)", "genre": "Thai Hip-Hop", "vibe_note": "เพลงประจำสายตี้"},
+                    {"artist": "SPRITE, GUYGEEGEE", "title": "ทน", "genre": "Thai Hip-Hop", "vibe_note": "เพลงไทยระดับชาร์ตโลก"},
+                    {"artist": "ยังโอม", "title": "เฉียบคะนอง", "genre": "Thai Hip-Hop", "vibe_note": "เบสแน่น เต้นสนุก"},
+                    {"artist": "โจอี้ บอย", "title": "ลอยทะเล", "genre": "3Cha Pop", "vibe_note": "เพลงเต้นระดับตำนาน"},
+                    {"artist": "แจ๊ส สปุ๊กนิค ปาปิยอง กุ๊กกุ๊ก", "title": "มือลั่น", "genre": "Thai Party", "vibe_note": "ร้องตามได้ทั้งงาน"},
+                    {"artist": "F.HERO", "title": "จำเก่ง", "genre": "Thai Hip-Hop", "vibe_note": "กรูฟสนุกสนาน"}
+                ]
             }
         }
 
-        # 1. Multi-Language Selection Pool
-        if languages and ('korean' in languages or 'japanese' in languages or 'chinese' in languages):
-            is_chill = (vibe_intent in ('chill', 'cafe'))
+        # 1. Direct match by specific vibe intent (Ensures 100% precision for requested style)
+        if vibe_intent == 'thai_rock':
+            target_key = 'thai_rock'
+        elif vibe_intent == 'global_90s':
+            target_key = 'global_90s'
+        elif vibe_intent == 'thai_90s':
+            target_key = 'thai_90s'
+        elif vibe_intent == 'tiktok_viral':
+            target_key = 'tiktok_viral'
+        elif vibe_intent == 'hiphop':
+            target_key = 'hiphop'
+        elif vibe_intent == 'phuecheewit':
+            target_key = 'phuecheewit'
+        elif vibe_intent == 'kpop':
+            target_key = 'kpop_hits'
+        elif vibe_intent == 'jpop':
+            target_key = 'jpop_citypop'
+        elif vibe_intent in ('chill', 'cafe'):
+            target_key = 'thai_chill' if re.search(r'[\u0e00-\u0e7f]', prompt) or (languages and 'thai' in languages and len(languages) == 1) else 'cafe'
+        elif vibe_intent == '3cha':
+            target_key = 'thai_party_3cha'
+        elif vibe_intent == 'club_peak':
+            target_key = 'club_peak'
+        elif vibe_intent == 'beach':
+            target_key = 'beach'
+        elif vibe_intent == 'rooftop':
+            target_key = 'rooftop'
+
+        # 2. Multi-Language Selection Pool
+        elif languages and len(languages) > 1 and ('korean' in languages or 'japanese' in languages or 'chinese' in languages):
             pool_by_lang = {
-                'thai': vibe_presets['thai_chill']['tracks'] if is_chill else (vibe_presets['thai_genz_mala']['tracks'] + vibe_presets['thai_chill']['tracks']),
+                'thai': vibe_presets['thai_chill']['tracks'],
                 'korean': vibe_presets['kpop_hits']['tracks'],
                 'japanese': vibe_presets['jpop_citypop']['tracks'],
                 'chinese': vibe_presets['cpop_mando']['tracks'],
-                'english': vibe_presets['cafe']['tracks'] if is_chill else (vibe_presets['beach']['tracks'] + vibe_presets['rooftop']['tracks'] + vibe_presets['cafe']['tracks'])
+                'english': vibe_presets['cafe']['tracks']
             }
             active_langs = [l for l in languages if l in pool_by_lang]
             if active_langs:
                 mixed_tracks = []
                 max_len = max(len(pool_by_lang[l]) for l in active_langs)
                 for i in range(max_len):
+                    if len(mixed_tracks) >= count:
+                        break
                     for l in active_langs:
                         if len(mixed_tracks) >= count:
                             break
@@ -707,15 +966,14 @@ class AICuratorService:
                 filled = cls._fill_tracks_to_count(mixed_tracks, count, 'Multi-Language Mix', vibe_presets, languages, vibe_intent, prompt)
                 lang_labels = {'thai': '🇹🇭 ไทย', 'english': '🇬🇧 สากล', 'korean': '🇰🇷 เกาหลี', 'japanese': '🇯🇵 ญี่ปุ่น', 'chinese': '🇨🇳 จีน'}
                 title_langs = ' + '.join(lang_labels.get(l, l) for l in active_langs)
-                vibe_label = "ชิลล์ ฟังสบาย" if is_chill else "คัดสรรพิเศษ"
                 return {
                     'setlist_title': f"✨ AI Multi-Language Mix ({title_langs})",
-                    'vibe_summary': f"เซ็ตเพลง{vibe_label} ผสมผสานเพลงภาษา {title_langs} สำหรับ {prompt or 'บรรยากาศร้าน'}",
+                    'vibe_summary': f"เซ็ตเพลงผสมผสานภาษา {title_langs} สำหรับ {prompt or 'บรรยากาศร้าน'}",
                     'tracks': filled
                 }
 
-        # 2. Single Language Selection
-        if languages and len(languages) == 1:
+        # 3. Single Language Selection
+        elif languages and len(languages) == 1:
             only_lang = languages[0]
             if only_lang == 'korean':
                 target_key = 'kpop_hits'
@@ -724,25 +982,11 @@ class AICuratorService:
             elif only_lang == 'chinese':
                 target_key = 'cpop_mando'
             elif only_lang == 'thai':
-                target_key = 'thai_chill' if vibe_intent in ('chill', 'cafe') else 'thai_genz_mala'
+                target_key = 'thai_chill' if any(w in p for w in ['ชิล', 'สบาย', 'chill']) else 'thai_genz_mala'
             else:
-                target_key = 'cafe' if vibe_intent in ('chill', 'cafe') else 'beach'
+                target_key = 'cafe' if any(w in p for w in ['ชิล', 'สบาย', 'chill']) else 'beach'
 
-            target = vibe_presets[target_key]
-            filled = cls._fill_tracks_to_count(target['tracks'], count, target_key, vibe_presets, languages, vibe_intent, prompt)
-            return {'setlist_title': target['title'], 'vibe_summary': target['summary'], 'tracks': filled}
-
-        # 3. Vibe-based selection: CHILL & CAFE IS GIVEN HIGHEST PRIORITY OVER GENERIC KEYWORDS
-        if vibe_intent in ('chill', 'cafe'):
-            target_key = 'thai_chill' if re.search(r'[\u0e00-\u0e7f]', prompt) or 'thai' in languages else 'cafe'
-        elif vibe_intent == '3cha':
-            target_key = 'thai_party_3cha'
-        elif vibe_intent == 'club_peak':
-            target_key = 'club_peak'
-        elif vibe_intent == 'beach':
-            target_key = 'beach'
-        elif vibe_intent == 'rooftop':
-            target_key = 'rooftop'
+        # 4. Fallback by keywords or online search
         elif any(w in p for w in ['หมาล่า', 'ชาบู', 'หมูกระทะ', 'นักศึกษา', 'นักเรียน', 'gen z', 'gen-z', 'วัยรุ่น', 'ร้านอาหาร', 't-pop', 'tpop', 'mala']):
             target_key = 'thai_genz_mala'
         else:
