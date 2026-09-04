@@ -130,6 +130,29 @@ class AICuratorService:
             q = f"{artist} - {title}".strip(' -')
             match = SpotifyService.search_track(q) or {}
             
+            # If the track wasn't found (likely LLM hallucination or translated title like 'Youngohm - Sao')
+            if not match and artist:
+                try:
+                    # Search Deezer for the real artist's top catalog
+                    clean_art = re.sub(r'(?:feat\.|ft\.|,|&).*', '', artist, flags=re.I).strip()
+                    r_art = requests.get(f"https://api.deezer.com/search?q={clean_art}&limit=6", timeout=4)
+                    if r_art.status_code == 200:
+                        candidates = r_art.json().get('data', [])
+                        for cand in candidates:
+                            c_art = cand.get('artist', {}).get('name', '').strip()
+                            c_title = cand.get('title', '').strip()
+                            # Check if artist matches
+                            if clean_art.lower() in c_art.lower() or c_art.lower() in clean_art.lower():
+                                real_m = SpotifyService.search_track(f"{c_art} - {c_title}")
+                                if real_m:
+                                    match = real_m
+                                    artist = real_m.get('artist', c_art)
+                                    title = real_m.get('title', c_title)
+                                    q = f"{artist} - {title}"
+                                    break
+                except Exception:
+                    pass
+
             # Determine or estimate realistic DJ metadata for Smart Mixtape flow
             fallback_genre = 'Indie / Acoustic Chill' if vibe_intent in ('chill', 'cafe') else 'Pop / Hits'
             genre = match.get('genre') or t.get('genre') or fallback_genre
@@ -240,10 +263,19 @@ class AICuratorService:
                 "- DO NOT ramp energy into high-energy club anthems. Keep the entire playlist relaxing and coherent from start to finish.\n"
             )
 
+        accuracy_rule = (
+            "CRITICAL SONG REALITY & ORIGINAL SCRIPT RULES (ZERO TOLERANCE FOR HALLUCINATIONS):\n"
+            "1. STRICTLY REAL SONGS ONLY: Every song MUST be an actual, real-world commercially released hit available on Spotify or Apple Music. NEVER invent fictional titles, fake collaborations, or imagine songs that don't exist!\n"
+            "2. ORIGINAL THAI TITLES (DO NOT TRANSLATE): If recommending a Thai song, the song title MUST be written in its official Thai script (e.g. 'ธาตุทองซาวด์', 'วายร้าย', 'คิด(แต่ไม่)ถึง', 'เพื่อนเล่น ไม่เล่นเพื่อน', 'โต๊ะริม', 'ทน', 'เฉยเมย'). NEVER translate or romanize Thai titles to English (e.g. NEVER write 'Sao', 'Kiss Me', 'Life Goes On', 'Baddest')!\n"
+            "3. ACCURATE ARTIST ATTRIBUTION: The artist MUST be the real performer of that song (e.g. 'Lover Boy' is by Phum Viphurit, NOT JAYLERR; Thai rapper is 'MILLI', NEVER confuse with 80s pop band 'Milli Vanilli').\n"
+            "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
+        )
+
         system_instruction = (
             "You are a World-Class Professional Music Director and DJ Playlist Curator. "
             f"{lang_instruction}\n"
-            f"{chill_rule}"
+            f"{chill_rule}\n"
+            f"{accuracy_rule}\n"
             "DJ MIXTAPE PLAYABILITY & VIBE COHERENCE RULES (CRITICAL):\n"
             "1. STRICT VIBE & GENRE COHERENCE: All recommended songs MUST strictly belong to the same musical mood, groove, and acoustic texture. NEVER mix incompatible genres together!\n"
             "   - If vibe is 'Chill / Neo-Soul / Lo-Fi / Cafe / Afternoon / Acoustic / Indie', choose Thai Neo-Soul, Lo-Fi, Bedroom Pop, or Indie Acoustic. NEVER include EDM, Dance, Heavy Rock, or 3Cha.\n"
@@ -256,16 +288,16 @@ class AICuratorService:
             '  "setlist_title": "Creative Playlist Title in Thai",\n'
             '  "vibe_summary": "1-2 sentence description in Thai explaining why these songs fit the crowd, venue, and languages",\n'
             '  "tracks": [\n'
-            '    {"artist": "Artist Name", "title": "Song Title", "genre": "Genre", "vibe_note": "Short reason in Thai why this song fits"}\n'
+            '    {"artist": "Artist Name", "title": "Exact Real Song Title (Thai in Thai script)", "genre": "Genre", "vibe_note": "Short reason in Thai why this song fits"}\n'
             '  ]\n'
             "}"
         )
 
-        user_content = f"Please curate exactly {count} distinct real songs for this request:\n{prompt}\nLanguages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}"
+        user_content = f"Please curate exactly {count} distinct real songs for this request:\n{prompt}\nLanguages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}\nREMINDER: Thai song titles must be in original Thai script (no English translation)."
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         body = {
             "contents": [{"parts": [{"text": system_instruction + "\n\n" + user_content}]}],
-            "generationConfig": {"response_mime_type": "application/json", "temperature": 0.6}
+            "generationConfig": {"response_mime_type": "application/json", "temperature": 0.15}
         }
         r = requests.post(url, json=body, timeout=20)
         if r.status_code == 200:
@@ -299,10 +331,19 @@ class AICuratorService:
                 "- Keep the entire playlist relaxing and coherent from start to finish without breaking the mood.\n"
             )
 
+        accuracy_rule = (
+            "CRITICAL SONG REALITY & ORIGINAL SCRIPT RULES (ZERO TOLERANCE FOR HALLUCINATIONS):\n"
+            "1. STRICTLY REAL SONGS ONLY: Every song MUST be an actual, real-world commercially released hit available on Spotify or Apple Music. NEVER invent fictional titles, fake collaborations, or imagine songs that don't exist!\n"
+            "2. ORIGINAL THAI TITLES (DO NOT TRANSLATE): If recommending a Thai song, the song title MUST be written in its official Thai script (e.g. 'ธาตุทองซาวด์', 'วายร้าย', 'คิด(แต่ไม่)ถึง', 'เพื่อนเล่น ไม่เล่นเพื่อน', 'โต๊ะริม', 'ทน', 'เฉยเมย'). NEVER translate or romanize Thai titles to English (e.g. NEVER write 'Sao', 'Kiss Me', 'Life Goes On', 'Baddest')!\n"
+            "3. ACCURATE ARTIST ATTRIBUTION: The artist MUST be the real performer of that song (e.g. 'Lover Boy' is by Phum Viphurit, NOT JAYLERR; Thai rapper is 'MILLI', NEVER confuse with 80s pop band 'Milli Vanilli').\n"
+            "4. BEST QUALITY: Pick well-known, certified hits and crowd favorites that people actually listen to.\n"
+        )
+
         system_prompt = (
             "You are a World-Class Professional Music Director and DJ Playlist Curator. "
             f"{lang_instruction}\n"
-            f"{chill_rule}"
+            f"{chill_rule}\n"
+            f"{accuracy_rule}\n"
             "DJ MIXTAPE PLAYABILITY & VIBE COHERENCE RULES (CRITICAL):\n"
             "1. STRICT VIBE & GENRE COHERENCE: All recommended songs MUST strictly belong to the same musical mood, groove, and acoustic texture. NEVER mix incompatible genres together!\n"
             "   - If vibe is 'Chill / Neo-Soul / Lo-Fi / Cafe / Afternoon / Acoustic / Indie', choose Thai Neo-Soul, Lo-Fi, Bedroom Pop, or Indie Acoustic. NEVER include EDM, Dance, Heavy Rock, or 3Cha.\n"
@@ -318,10 +359,10 @@ class AICuratorService:
             "model": "gpt-4o-mini",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Recommend {count} tracks for: {prompt}. Languages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}"}
+                {"role": "user", "content": f"Recommend {count} tracks for: {prompt}. Languages: {', '.join(languages or ['thai', 'english'])}\nMixtape Mode: {mixtape_mode}\nREMINDER: Thai song titles must be in original Thai script (no English translation)."}
             ],
             "response_format": {"type": "json_object"},
-            "temperature": 0.6
+            "temperature": 0.15
         }
         r = requests.post(url, headers=headers, json=body, timeout=20)
         if r.status_code == 200:

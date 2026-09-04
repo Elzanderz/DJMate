@@ -1,6 +1,6 @@
 [package]
 name = "djmate"
-version = "1.1.0"
+version = "1.1.1"
 description = "DJmate - Pro DJ Harmonic Suite"
 authors = ["DJmate"]
 edition = "2021"
