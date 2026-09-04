@@ -1,8 +1,7 @@
-﻿name: Multiplatform App Build
+name: Multiplatform App Build
 
 on:
-  push:
-    branches: [ main ]
+  # ปิดการรันอัตโนมัติเมื่อ push - จะรันเฉพาะเมื่อกดสั่งแบบ Manual (Run workflow) เท่านั้น
   workflow_dispatch:
 
 jobs:

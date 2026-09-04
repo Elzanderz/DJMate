@@ -199,6 +199,13 @@ async fn get_output_dir() -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn get_download_subfolders() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| run_bridge("get_download_subfolders", json!({})))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn fetch_metadata(url: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || run_bridge("fetch_metadata", json!({ "url": url })))
         .await
@@ -731,6 +738,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_output_dir,
+            get_download_subfolders,
             fetch_metadata,
             search_spotify_tracks,
             generate_ai_playlist,

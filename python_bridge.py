@@ -11,6 +11,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 # UTF-8 Environment Configuration
 os.environ["PYTHONIOENCODING"] = "utf-8"
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +31,7 @@ from src.services.history_service import HistoryService
 from src.services.audio_normalizer_service import AudioNormalizerService
 from src.services.beatport_service import BeatportService
 from src.services.youtube_mixtape_service import YouTubeMixtapeService
-from src.services.music_sources_service import SoundCloudService, AppleMusicService
+from src.services.music_sources_service import SoundCloudService, AppleMusicService, BandcampService
 from src.services.ai_curator_service import AICuratorService
 from src.services.dj_exporters import DJExportersService
 from src.services.music_search_service import MusicSearchService
@@ -83,6 +90,24 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
             HistoryService.sync_downloads_folder(selected)
         return {'result': selected or output_dir}
 
+    elif cmd_name == 'get_download_subfolders':
+        folders = []
+        try:
+            if os.path.exists(output_dir):
+                for item in os.listdir(output_dir):
+                    item_path = os.path.join(output_dir, item)
+                    if os.path.isdir(item_path) and not item.startswith(('.', '$')) and item.lower() not in ('__pycache__', 'node_modules', 'dist', 'src-tauri', 'scratch'):
+                        audio_count = sum(1 for f in os.listdir(item_path) if any(f.lower().endswith(ext) for ext in ('.mp3', '.m4a', '.flac', '.wav', '.webm', '.ogg')))
+                        folders.append({
+                            'name': item,
+                            'path': item_path,
+                            'count': audio_count
+                        })
+        except Exception:
+            pass
+        folders.sort(key=lambda x: x['name'].lower())
+        return {'result': folders}
+
     elif cmd_name == 'open_folder':
         target_path = payload.get('path', '').strip()
         playlist_name = payload.get('playlist_name', '').strip()
@@ -122,6 +147,8 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
                 tracks = BeatportService.get_info(url)
             elif SoundCloudService.is_soundcloud_url(url):
                 tracks = SoundCloudService.get_info(url)
+            elif BandcampService.is_bandcamp_url(url):
+                tracks = BandcampService.get_info(url)
             elif AppleMusicService.is_applemusic_url(url):
                 tracks = AppleMusicService.get_info(url)
             elif YouTubeMixtapeService.is_youtube_url(url):
@@ -456,6 +483,9 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         track['folder_mode'] = folder_mode
         track['normalize_audio'] = normalize_audio
         track['target_lufs'] = target_lufs
+        custom_folder = payload.get('custom_folder') or track.get('custom_folder')
+        if custom_folder:
+            track['custom_folder'] = custom_folder
 
         try:
             target_file = DownloaderService.download_track(

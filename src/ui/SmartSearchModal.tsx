@@ -333,7 +333,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="พิมพ์ชื่อเพลง, ศิลปิน, แนวเพลง เช่น โต๊ะริม, วัดใจ, Three Man Down, Silly Fools, EDM 128..."
+                placeholder="พิมพ์ชื่อเพลง, ศิลปิน, DJ Edit, SoundCloud Remix เช่น Fred again, Skrillex, EDM Bootleg..."
                 className="w-full bg-[#0d0d11] text-white text-sm pl-10 pr-10 py-3 rounded-2xl border border-white/10 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner font-medium placeholder:text-zinc-500"
               />
               {query && (
@@ -613,7 +613,17 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                               </h4>
                               
                               {/* Source Badge */}
-                              <span className="text-[10px] bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5 shrink-0">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${
+                                t.source === 'SoundCloud'
+                                  ? 'bg-[#ff5500]/15 text-[#ff7733] border-[#ff5500]/30 font-semibold'
+                                  : t.source === 'Bandcamp'
+                                  ? 'bg-[#1da0c3]/15 text-[#3ac4e8] border-[#1da0c3]/30 font-semibold'
+                                  : t.source === 'Beatport'
+                                  ? 'bg-[#01ff95]/15 text-[#01ff95] border-[#01ff95]/30 font-semibold'
+                                  : t.source === 'Deezer'
+                                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                                  : 'bg-white/5 text-zinc-400 border-white/5'
+                              }`}>
                                 {t.source || 'Online'}
                               </span>
 

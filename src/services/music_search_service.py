@@ -290,9 +290,74 @@ class MusicSearchService:
         return results
 
     @classmethod
+    def search_soundcloud(cls, query: str, limit: int = 8) -> List[Dict]:
+        """
+        Fast SoundCloud search using yt-dlp to find DJ edits, remixes, bootlegs, and club versions.
+        """
+        results = []
+        try:
+            import yt_dlp
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+                'skip_download': True,
+                'ignoreerrors': True,
+            }
+            search_term = f"scsearch{limit}:{query}"
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(search_term, download=False)
+                if info and 'entries' in info:
+                    for idx, entry in enumerate(info['entries']):
+                        if not entry:
+                            continue
+                        raw_title = entry.get('title', '')
+                        uploader = entry.get('uploader') or entry.get('artist') or ''
+                        dur = entry.get('duration') or 0
+                        dur_ms = int(dur * 1000) if dur else 0
+                        url = entry.get('url') or entry.get('webpage_url') or ''
+                        
+                        cover = entry.get('thumbnail') or ''
+                        thumbnails = entry.get('thumbnails', [])
+                        if thumbnails:
+                            cover = thumbnails[-1].get('url', cover)
+                        if cover and '-large.' in cover:
+                            cover = cover.replace('-large.', '-t500x500.')
+
+                        artist = uploader
+                        title = raw_title
+                        if ' - ' in raw_title and not uploader:
+                            parts = raw_title.split(' - ', 1)
+                            artist = parts[0].strip()
+                            title = parts[1].strip()
+
+                        genre = entry.get('genre') or 'Electronic / Club'
+
+                        results.append({
+                            'id': f"sc_{entry.get('id', idx)}",
+                            'title': title,
+                            'artist': artist or 'SoundCloud Producer',
+                            'album': 'SoundCloud Release',
+                            'duration_ms': dur_ms,
+                            'cover_url': cover,
+                            'preview_url': '',
+                            'direct_url': url,
+                            'url': url,
+                            'sc_url': url,
+                            'year': '',
+                            'genre': genre,
+                            'source': 'SoundCloud',
+                            'search_query': f"{artist} - {title}" if artist else title,
+                            'raw_source': 'soundcloud'
+                        })
+        except Exception as e:
+            print(f"[MusicSearchService] SoundCloud search notice: {e}")
+        return results
+
+    @classmethod
     def search_online_tracks(cls, query: str, limit_per_source: int = 8, check_local: bool = True) -> List[Dict]:
         """
-        Aggregate and deduplicate online search results across iTunes, Deezer, and YouTube.
+        Aggregate and deduplicate online search results across iTunes, Deezer, SoundCloud, and YouTube.
         Then, automatically marks if each song is ALREADY present in the local library!
         """
         if not query or len(query.strip()) < 1:
@@ -301,19 +366,22 @@ class MusicSearchService:
         q = query.strip()
 
         # Run multi-source searches in parallel for maximum responsiveness
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             fut_itunes = executor.submit(cls.search_itunes, q, limit_per_source, 'TH')
             fut_deezer = executor.submit(cls.search_deezer, q, limit_per_source)
+            fut_soundcloud = executor.submit(cls.search_soundcloud, q, limit_per_source)
             fut_youtube = executor.submit(cls.search_youtube, q, limit_per_source)
 
             res_itunes = fut_itunes.result()
             res_deezer = fut_deezer.result()
+            res_soundcloud = fut_soundcloud.result()
             res_youtube = fut_youtube.result()
 
-        # Combine results prioritizing rich metadata sources (iTunes / Deezer first, then YouTube)
+        # Combine results prioritizing rich metadata sources (iTunes / Deezer / SoundCloud first, then YouTube)
         raw_combined = []
         raw_combined.extend(res_itunes)
         raw_combined.extend(res_deezer)
+        raw_combined.extend(res_soundcloud)
         raw_combined.extend(res_youtube)
 
         # Deduplicate across online sources by title & artist

@@ -318,18 +318,25 @@ class DownloaderService:
 
         playlist_name = track_info.get('playlist_name', '').strip()
         folder_mode = track_info.get('folder_mode', 'playlist')
+        custom_folder = (track_info.get('custom_folder') or track_info.get('target_folder') or '').strip()
 
         # Smart Folder Organization:
-        # If the track belongs to a playlist/album folder, ALWAYS route it into downloads/<playlist_name>/
         save_dir = output_dir
-        if playlist_name and playlist_name.lower() not in ('library', 'downloads', '', 'singles', 'all'):
-            clean_playlist = cls.sanitize_filename(playlist_name)
-            save_dir = os.path.join(output_dir, clean_playlist)
+        if folder_mode == 'single':
+            # User explicitly requested all tracks in main downloads folder
+            save_dir = output_dir
+        elif custom_folder:
+            # User specified a custom folder name (e.g. "SoundCloud", "Club Edit", etc.)
+            clean_custom = cls.sanitize_filename(custom_folder)
+            save_dir = os.path.join(output_dir, clean_custom)
         elif folder_mode == 'artist_album' and artist:
             clean_artist = cls.sanitize_filename(artist)
             save_dir = os.path.join(output_dir, clean_artist)
         elif folder_mode == 'camelot_key' and track_info.get('camelot'):
             save_dir = os.path.join(output_dir, cls.sanitize_filename(track_info['camelot']))
+        elif playlist_name and playlist_name.lower() not in ('library', 'downloads', '', 'singles', 'all', 'single'):
+            clean_playlist = cls.sanitize_filename(playlist_name)
+            save_dir = os.path.join(output_dir, clean_playlist)
         else:
             save_dir = output_dir
 
@@ -463,8 +470,8 @@ class DownloaderService:
                 if ffmpeg_dir and ffmpeg_dir not in os.environ.get('PATH', ''):
                     os.environ['PATH'] = f"{ffmpeg_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
-            # 1. Direct Stream Download (e.g. YouTube video / playlist / soundcloud)
-            direct_url = track_info.get('direct_url') or track_info.get('url')
+            # 1. Direct Stream Download (e.g. YouTube video / playlist / soundcloud / bandcamp)
+            direct_url = track_info.get('direct_url') or track_info.get('url') or track_info.get('sc_url') or track_info.get('soundcloud_url')
             if not direct_url:
                 t_id = str(track_info.get('id') or '')
                 if t_id.startswith('yt_'):
@@ -477,8 +484,15 @@ class DownloaderService:
 
             if direct_url:
                 try:
+                    is_sc = 'soundcloud.com' in direct_url or 'sndcdn.com' in direct_url
+                    is_bc = 'bandcamp.com' in direct_url
                     if progress_callback:
-                        progress_callback(10.0, 'Downloading audio directly from YouTube...')
+                        if is_sc:
+                            progress_callback(10.0, 'Downloading high-quality audio from SoundCloud...')
+                        elif is_bc:
+                            progress_callback(10.0, 'Downloading high-quality studio audio from Bandcamp...')
+                        else:
+                            progress_callback(10.0, 'Downloading direct audio stream...')
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(direct_url, download=True)
                         if info:
@@ -551,7 +565,7 @@ class DownloaderService:
                         last_error = dl_err
                         continue
 
-                # Final fallback if flat search returned nothing
+                # Final fallback: YouTube search, then SoundCloud search if needed
                 if not download_success:
                     fallback_q = search_candidates[0] if search_candidates else f"{artist} {title}"
                     try:
@@ -561,6 +575,18 @@ class DownloaderService:
                                 download_success = True
                     except Exception as fb_err:
                         last_error = fb_err
+
+                if not download_success:
+                    try:
+                        fallback_sc = f"{artist} {title}"
+                        if progress_callback:
+                            progress_callback(15.0, 'Searching SoundCloud Master Stream...')
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            info = ydl.extract_info(f'scsearch1:{fallback_sc}', download=True)
+                            if info:
+                                download_success = True
+                    except Exception as sc_fb_err:
+                        last_error = sc_fb_err
 
             # Locate actual converted file
             actual_file = target_file

@@ -63,6 +63,7 @@ interface Track {
   search_query?: string;
   vibe_note?: string;
   folder_mode?: string;
+  custom_folder?: string;
 }
 
 const CAMELOT_WHEEL = [
@@ -386,6 +387,12 @@ export default function App() {
   const [quality, setQuality] = useState('320 kbps');
   const [stemType, setStemType] = useState('full');
   const [folderMode, setFolderMode] = useState('playlist');
+  const [customFolderName, setCustomFolderName] = useState('');
+  const [showFolderPickerModal, setShowFolderPickerModal] = useState(false);
+  const [targetFolderChoice, setTargetFolderChoice] = useState<'custom' | 'single' | 'playlist'>('custom');
+  const [customFolderInput, setCustomFolderInput] = useState('SoundCloud');
+  const [existingDownloadFolders, setExistingDownloadFolders] = useState<Array<{ name: string; count: number }>>([]);
+  const [folderFilterText, setFolderFilterText] = useState('');
   const [normalizeAudio, setNormalizeAudio] = useState<boolean>(true);
   const [targetLufs, setTargetLufs] = useState<number>(-14.0);
   const [isNormalizingBatch, setIsNormalizingBatch] = useState<boolean>(false);
@@ -1710,13 +1717,38 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     }
   };
 
+  const applyDestinationFolderToTracks = (rawTracks: Track[]): Track[] => {
+    return rawTracks.map((t) => {
+      let fMode = t.folder_mode || folderMode;
+      let cFolder = t.custom_folder;
+      let pName = t.playlist_name;
+
+      if (folderMode === 'custom' && customFolderName) {
+        fMode = 'custom';
+        cFolder = customFolderName;
+        pName = customFolderName;
+      } else if (folderMode === 'single') {
+        fMode = 'single';
+        cFolder = '';
+      }
+
+      return {
+        ...t,
+        folder_mode: fMode,
+        custom_folder: cFolder,
+        playlist_name: pName || t.playlist_name,
+      };
+    });
+  };
+
   const handleAnalyze = async () => {
     if (!url.trim()) return;
     setIsAnalyzing(true);
     try {
       const fetched: Track[] = await invokeBackend('fetch_metadata', { url: url.trim() });
       if (fetched && fetched.length > 0) {
-        setTracks((prev) => [...prev, ...fetched]);
+        const prepared = applyDestinationFolderToTracks(fetched);
+        setTracks((prev) => [...prev, ...prepared]);
         setUrl('');
         showToast(`Loaded ${fetched.length} track(s) into queue`, 'success');
       } else {
@@ -1792,9 +1824,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       const res: Track[] = await invokeBackend('search_spotify_tracks', { queries });
       const finalTracks = (res && Array.isArray(res) && res.length > 0) ? res : immediateTracks;
       
-      setTracks((prev) => [...prev, ...finalTracks]);
+      const prepared = applyDestinationFolderToTracks(finalTracks);
+      setTracks((prev) => [...prev, ...prepared]);
       if (activeTab === 'yt_extractor') {
-        setYtExtractedTracks(finalTracks);
+        setYtExtractedTracks(prepared);
       }
       setShowTracklistModal(false);
       setRawTracklistText('');
@@ -1802,9 +1835,10 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       showToast(`Added ${finalTracks.length} tracks to Download Queue!`, 'success');
     } catch (e) {
       console.warn('Backend search fallback:', e);
-      setTracks((prev) => [...prev, ...immediateTracks]);
+      const preparedFallback = applyDestinationFolderToTracks(immediateTracks);
+      setTracks((prev) => [...prev, ...preparedFallback]);
       if (activeTab === 'yt_extractor') {
-        setYtExtractedTracks(immediateTracks);
+        setYtExtractedTracks(preparedFallback);
       }
       setShowTracklistModal(false);
       setRawTracklistText('');
@@ -1858,7 +1892,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
   const handleAddYtTracksToQueue = () => {
     if (ytExtractedTracks.length === 0) return;
-    setTracks((prev) => [...prev, ...ytExtractedTracks]);
+    const prepared = applyDestinationFolderToTracks(ytExtractedTracks);
+    setTracks((prev) => [...prev, ...prepared]);
     setActiveTab('queue');
     showToast(`Added ${ytExtractedTracks.length} YouTube songs to Download Queue!`, 'success');
   };
@@ -1956,12 +1991,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     };
 
     try {
+      const effectiveCustomFolder = target.custom_folder || (effectiveFolderMode === 'custom' ? customFolderName : undefined);
       const res = await invokeBackend('download_single', {
         track: targetWithIndex,
         audio_format: format,
         quality: quality,
         stem_type: stemType,
         folder_mode: effectiveFolderMode,
+        custom_folder: effectiveCustomFolder,
         normalize_audio: normalizeAudio,
         target_lufs: targetLufs,
       });
@@ -2029,9 +2066,23 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
   const handleRemoveSelected = () => {
     if (selectedIndices.length === 0) return;
-    setTracks((prev) => prev.filter((_, idx) => !selectedIndices.includes(idx)));
+    const remaining = tracks.filter((_, idx) => !selectedIndices.includes(idx));
+    setTracks(remaining);
     setSelectedIndices([]);
-    showToast('Removed selected tracks from queue', 'info');
+    if (remaining.length === 0) {
+      setCustomFolderName('');
+      setFolderMode('playlist');
+    }
+    showToast('ลบเพลงที่เลือกออกจากคิวแล้ว', 'info');
+  };
+
+  const handleClearDownloadQueue = () => {
+    if (tracks.length === 0) return;
+    setTracks([]);
+    setSelectedIndices([]);
+    setCustomFolderName('');
+    setFolderMode('playlist');
+    showToast('ล้างคิวเพลงและรีเซ็ตโฟลเดอร์ปลายทางกลับเป็นค่าเริ่มต้นแล้ว', 'info');
   };
 
   const handleConvertAll = async () => {
@@ -2255,6 +2306,53 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       a.click();
       URL.revokeObjectURL(url);
       showToast('💾 บันทึกไฟล์ .txt เรียบร้อยแล้ว!', 'success');
+    }
+  };
+
+  const handleOpenFolderPicker = async () => {
+    const defaultVal = customFolderName || (tracks[0]?.playlist_name && tracks[0].playlist_name !== 'Singles' ? tracks[0].playlist_name : 'SoundCloud');
+    setCustomFolderInput(defaultVal);
+    setFolderFilterText('');
+    setTargetFolderChoice(folderMode === 'single' ? 'single' : (folderMode === 'playlist' ? 'playlist' : 'custom'));
+    setShowFolderPickerModal(true);
+
+    // Preload folders from loaded library instantly so user sees existing folders immediately
+    const folderMap = new Map<string, number>();
+    libraryTracks.forEach((t) => {
+      const p = getTrackFolderName(t);
+      if (p && p !== 'Singles' && p.toLowerCase() !== 'all') {
+        folderMap.set(p, (folderMap.get(p) || 0) + 1);
+      }
+    });
+    if (folderMap.size > 0) {
+      const initialList = Array.from(folderMap.entries())
+        .map(([name, count]) => ({ name, path: '', count }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setExistingDownloadFolders(initialList);
+    }
+
+    try {
+      const res = await invokeBackend('get_download_subfolders');
+      const rawList: Array<{ name: string; path?: string; count?: number }> =
+        Array.isArray(res) ? res : (res && Array.isArray(res.result) ? res.result : []);
+      if (rawList.length > 0) {
+        setExistingDownloadFolders((prev) => {
+          const combined = new Map<string, { name: string; path?: string; count: number }>();
+          prev.forEach((f) => combined.set(f.name.toLowerCase(), f));
+          rawList.forEach((f) => {
+            const key = f.name.toLowerCase();
+            const existing = combined.get(key);
+            combined.set(key, {
+              name: f.name,
+              path: f.path || existing?.path || '',
+              count: (typeof f.count === 'number' && f.count > 0) ? f.count : (existing?.count || 0),
+            });
+          });
+          return Array.from(combined.values()).sort((a, b) => a.name.localeCompare(b.name));
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load subfolders from backend:', err);
     }
   };
 
@@ -3306,11 +3404,29 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
             <select
               value={folderMode}
-              onChange={(e) => setFolderMode(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'custom') {
+                  handleOpenFolderPicker();
+                  return;
+                }
+                setFolderMode(val);
+                if (val === 'single') {
+                  setTracks(prev => prev.map(t => ({
+                    ...t,
+                    custom_folder: '',
+                    folder_mode: 'single'
+                  })));
+                  showToast('บันทึกรวมในโฟลเดอร์หลัก downloads โดยตรง (ไม่สร้างโฟลเดอร์ย่อย)', 'info');
+                }
+              }}
               className="bg-[#242424] hover:bg-[#282828] text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#333333] focus:outline-none cursor-pointer transition max-w-[230px] truncate"
             >
               <option value="playlist">📁 By Playlist / Chart</option>
-              <option value="single">📁 Single Folder (รวม)</option>
+              <option value="single">📁 Single Folder (รวมทุกเพลง)</option>
+              <option value="custom">
+                {customFolderName ? `📂 ${customFolderName}` : '📂 กำหนดโฟลเดอร์เอง (Custom)...'}
+              </option>
               <option value="artist_album">👤 Artist / Album</option>
               <option value="camelot_key">🎛️ Camelot Key</option>
             </select>
@@ -3381,7 +3497,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                         }
                       }
                     }}
-                    placeholder="วางลิงก์ YouTube / Spotify / Beatport หรือพิมพ์ชื่อเพลงไทย-สากลเพื่อค้นหา..."
+                    placeholder="วางลิงก์ SoundCloud / Spotify / Beatport / YouTube หรือพิมพ์ชื่อเพลง/DJ Edit เพื่อค้นหา..."
                     className="flex-1 bg-[#101013] text-white text-xs px-4 py-2.5 rounded-xl border border-white/10 focus:border-indigo-500/50 focus:outline-none transition shadow-inner font-medium placeholder:text-zinc-500"
                   />
                   <button
@@ -3464,6 +3580,17 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   >
                     rekordbox XML
                   </button>
+
+                  {tracks.length > 0 && (
+                    <button
+                      onClick={handleClearDownloadQueue}
+                      className="px-3.5 py-2 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/25 text-xs font-semibold transition active:scale-95 flex items-center gap-1.5"
+                      title="ล้างคิวเพลงทั้งหมด และรีเซ็ตโฟลเดอร์ปลายทางกลับเป็นค่าเริ่มต้น (Clear & Reset)"
+                    >
+                      <span>✕</span>
+                      <span>Clear</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -3478,6 +3605,17 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                     <span className="font-mono font-bold text-[#1DB954] bg-[#1DB954]/15 px-2.5 py-0.5 rounded-full border border-[#1DB954]/30">
                       {tracks.filter(t => t.done).length} / {tracks.length} Completed ({tracks.length > 0 ? Math.round((tracks.filter(t => t.done).length / tracks.length) * 100) : 0}%)
                     </span>
+                    <button
+                      onClick={handleOpenFolderPicker}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 rounded-lg text-[11px] font-medium transition cursor-pointer shadow-sm active:scale-95 ml-2"
+                      title="คลิกเพื่อเลือกหรือพิมพ์ชื่อโฟลเดอร์ปลายทางสำหรับเพลงทั้งหมดในคิวนี้"
+                    >
+                      <span>📁 ปลายทาง:</span>
+                      <span className="font-bold text-[#1DB954] max-w-[140px] truncate">
+                        {folderMode === 'single' ? 'โฟลเดอร์หลัก (รวม)' : (folderMode === 'custom' && customFolderName ? customFolderName : (tracks[0]?.playlist_name || 'ตามเพลย์ลิสต์'))}
+                      </span>
+                      <span className="text-[10px] text-zinc-400">✎ เปลี่ยน</span>
+                    </button>
                   </div>
                   <div className="flex-1 max-w-sm bg-[#282828] h-2 rounded-full overflow-hidden border border-white/5">
                     <div
@@ -3506,14 +3644,25 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                   <div className="col-span-1 text-center font-mono">Key</div>
                   <div className="col-span-1 text-center font-mono">BPM</div>
                   <div className="col-span-1 text-center">Stars</div>
-                  <div className="col-span-2 text-right">Actions</div>
+                  <div className="col-span-2 text-right flex items-center justify-end gap-1.5">
+                    <span>Actions</span>
+                    {tracks.length > 0 && (
+                      <button
+                        onClick={handleClearDownloadQueue}
+                        className="text-[10px] text-rose-400 hover:text-rose-300 hover:underline lowercase font-normal transition ml-1"
+                        title="ล้างคิวเพลงทั้งหมดและรีเซ็ตโฟลเดอร์"
+                      >
+                        (clear)
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="py-2 space-y-0.5">
                   {tracks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-28 text-[#727272]">
                       <p className="font-bold text-[#b3b3b3] text-sm">Queue is empty</p>
-                      <p className="text-xs text-[#727272] mt-1">Paste a Spotify or Beatport URL (Track, Release, Chart, Top 100) to load songs</p>
+                      <p className="text-xs text-[#727272] mt-1">Paste a Spotify, SoundCloud, Beatport, or Bandcamp URL to load songs</p>
                     </div>
                   ) : (
                     <AnimatePresence>
@@ -3568,7 +3717,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                             <span className="inline-flex items-center w-fit px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold truncate">
                               {t.genre || 'Electronic / Dance'}
                             </span>
-                            <span className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
+                            <span className={`text-[10px] font-mono truncate mt-0.5 ${
+                              t.source === 'SoundCloud' ? 'text-[#ff7733] font-semibold' :
+                              t.source === 'Bandcamp' ? 'text-[#3ac4e8] font-semibold' :
+                              t.source === 'Beatport' ? 'text-[#01ff95] font-semibold' :
+                              'text-zinc-400'
+                            }`}>
                               {t.source || 'Online'}
                             </span>
                           </div>
@@ -3626,7 +3780,20 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                             <button onClick={() => setEditingTrack({ ...t, index: idx, source: 'queue' })} className="text-zinc-500 hover:text-white p-1" title="Edit Tags">
                               ✏️
                             </button>
-                            <button onClick={() => setTracks((prev) => prev.filter((_, i) => i !== idx))} className="text-zinc-600 hover:text-rose-400 p-1" title="Remove">
+                            <button
+                              onClick={() => {
+                                setTracks((prev) => {
+                                  const next = prev.filter((_, i) => i !== idx);
+                                  if (next.length === 0) {
+                                    setCustomFolderName('');
+                                    setFolderMode('playlist');
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="text-zinc-600 hover:text-rose-400 p-1"
+                              title="Remove"
+                            >
                               ✕
                             </button>
                           </div>
@@ -3760,7 +3927,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                         <div className="col-span-3 flex items-center justify-end gap-2">
                           <button
                             onClick={() => {
-                              setTracks((prev) => [...prev, t]);
+                              const [prepared] = applyDestinationFolderToTracks([t]);
+                              setTracks((prev) => [...prev, prepared]);
                               showToast(`Added "${t.title}" to Queue`, 'success');
                             }}
                             className="px-3 py-1 rounded-xl bg-[#202026] hover:bg-[#282830] text-indigo-400 text-xs font-bold border border-white/5 transition"
@@ -8590,7 +8758,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         initialQuery={smartSearchInitialQuery}
         invokeBackend={invokeBackend}
         onAddTracksToQueue={(newTracks) => {
-          setTracks((prev) => [...prev, ...newTracks]);
+          const prepared = applyDestinationFolderToTracks(newTracks);
+          setTracks((prev) => [...prev, ...prepared]);
           setActiveTab('queue');
         }}
         onPlayTrack={(track) => {
@@ -8669,6 +8838,272 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-rose-900/40 transition active:scale-95 flex items-center gap-2"
               >
                 <span>{confirmDialog.confirmText || '🗑️ ลบถาวร'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TARGET FOLDER PICKER MODAL ================= */}
+      {showFolderPickerModal && (
+        <div 
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none"
+          onClick={() => setShowFolderPickerModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-[#141418] border border-white/10 p-6 shadow-2xl shadow-black/80 relative flex flex-col space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-xl text-indigo-400">
+                  📁
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-wide">กำหนดโฟลเดอร์ปลายทาง (Target Folder)</h3>
+                  <p className="text-xs text-zinc-400">เลือกหรือพิมพ์ชื่อโฟลเดอร์ที่ต้องการบันทึกเพลงในคิวนี้</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFolderPickerModal(false)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Options */}
+            <div className="space-y-3">
+              {/* Option 1: Custom Folder */}
+              <div
+                onClick={() => setTargetFolderChoice('custom')}
+                className={`p-4 rounded-2xl border transition cursor-pointer ${
+                  targetFolderChoice === 'custom'
+                    ? 'bg-indigo-500/10 border-indigo-500/50 shadow-inner'
+                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">📂</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">รวมในโฟลเดอร์ที่กำหนด (Custom Folder)</h4>
+                      <p className="text-[11px] text-zinc-400">รวมเพลงทั้งหมดในคิวนี้ไว้ในโฟลเดอร์เดียวกัน</p>
+                    </div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="folder_choice"
+                    checked={targetFolderChoice === 'custom'}
+                    onChange={() => setTargetFolderChoice('custom')}
+                    className="accent-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                </div>
+
+                {targetFolderChoice === 'custom' && (
+                  <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400 font-mono">downloads /</span>
+                      <input
+                        type="text"
+                        value={customFolderInput}
+                        onChange={(e) => setCustomFolderInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const clean = customFolderInput.trim() || 'SoundCloud';
+                            setCustomFolderName(clean);
+                            setFolderMode('custom');
+                            setTracks(prev => prev.map(t => ({
+                              ...t,
+                              custom_folder: clean,
+                              playlist_name: clean,
+                              folder_mode: 'custom'
+                            })));
+                            showToast(`กำหนดโฟลเดอร์ปลายทางเป็น "${clean}" เรียบร้อยแล้ว`, 'success');
+                            setShowFolderPickerModal(false);
+                          }
+                        }}
+                        placeholder="พิมพ์ชื่อโฟลเดอร์ เช่น SoundCloud, Club Edits..."
+                        className="flex-1 bg-[#0c0c0f] text-white text-xs px-3.5 py-2.5 rounded-xl border border-white/15 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                        autoFocus
+                      />
+                    </div>
+                    {/* Presets Chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-zinc-400 font-semibold">แนะนำ:</span>
+                      {['SoundCloud', 'Club Edits', 'DJ Remixes', 'Party Mix', 'Dance EDM', 'TikTok Hits'].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCustomFolderInput(preset);
+                          }}
+                          className={`text-[10px] px-2.5 py-1 rounded-lg border transition ${
+                            customFolderInput === preset
+                              ? 'bg-indigo-500 text-white border-indigo-400 font-bold'
+                              : 'bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Existing Folders in Library / Downloads */}
+                    <div className="space-y-1.5 pt-2 border-t border-white/5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
+                          <span>📁 โฟลเดอร์ที่มีอยู่แล้ว ({existingDownloadFolders.length}):</span>
+                        </span>
+                        {existingDownloadFolders.length > 4 && (
+                          <input
+                            type="text"
+                            value={folderFilterText}
+                            onChange={(e) => setFolderFilterText(e.target.value)}
+                            placeholder="พิมพ์ค้นหาโฟลเดอร์..."
+                            className="bg-[#101014] text-white text-[10px] px-2.5 py-1 rounded-lg border border-white/10 focus:outline-none focus:border-indigo-400 w-36 placeholder:text-zinc-600"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        )}
+                      </div>
+
+                      <div className="max-h-36 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
+                        {existingDownloadFolders
+                          .filter(f => !folderFilterText || f.name.toLowerCase().includes(folderFilterText.toLowerCase()))
+                          .map((folder) => {
+                            const isSelected = customFolderInput.toLowerCase() === folder.name.toLowerCase();
+                            return (
+                              <div
+                                key={folder.name}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCustomFolderInput(folder.name);
+                                }}
+                                className={`flex items-center justify-between px-3 py-1.5 rounded-xl border text-xs cursor-pointer transition ${
+                                  isSelected
+                                    ? 'bg-[#1DB954]/20 border-[#1DB954]/60 text-[#1DB954] font-bold shadow-sm'
+                                    : 'bg-white/[0.02] hover:bg-white/[0.06] border-white/5 text-zinc-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-sm">📂</span>
+                                  <span className="truncate">{folder.name}</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5 shrink-0 ml-2">
+                                  {folder.count} เพลง
+                                </span>
+                              </div>
+                            );
+                          })}
+                        {existingDownloadFolders.length === 0 && (
+                          <p className="text-[11px] text-zinc-500 italic py-1">ยังไม่มีโฟลเดอร์ย่อยใน downloads</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Option 2: Single Folder (Direct into downloads) */}
+              <div
+                onClick={() => setTargetFolderChoice('single')}
+                className={`p-4 rounded-2xl border transition cursor-pointer ${
+                  targetFolderChoice === 'single'
+                    ? 'bg-emerald-500/10 border-emerald-500/50 shadow-inner'
+                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">📁</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">บันทึกรวมในโฟลเดอร์หลัก (Single Folder)</h4>
+                      <p className="text-[11px] text-zinc-400">เก็บไฟล์ทั้งหมดลงใน downloads โดยตรง (ไม่สร้างโฟลเดอร์ย่อย)</p>
+                    </div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="folder_choice"
+                    checked={targetFolderChoice === 'single'}
+                    onChange={() => setTargetFolderChoice('single')}
+                    className="accent-emerald-500 w-4 h-4 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Option 3: By Playlist / Chart */}
+              <div
+                onClick={() => setTargetFolderChoice('playlist')}
+                className={`p-4 rounded-2xl border transition cursor-pointer ${
+                  targetFolderChoice === 'playlist'
+                    ? 'bg-indigo-500/10 border-indigo-500/50 shadow-inner'
+                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">🗂️</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">แยกตามเพลย์ลิสต์/ชาร์ต (By Playlist / Chart)</h4>
+                      <p className="text-[11px] text-zinc-400">สร้างโฟลเดอร์ย่อยตามชื่อเพลย์ลิสต์เดิมของแต่ละเพลง</p>
+                    </div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="folder_choice"
+                    checked={targetFolderChoice === 'playlist'}
+                    onChange={() => setTargetFolderChoice('playlist')}
+                    className="accent-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowFolderPickerModal(false)}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-semibold transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (targetFolderChoice === 'custom') {
+                    const clean = customFolderInput.trim() || 'SoundCloud';
+                    setCustomFolderName(clean);
+                    setFolderMode('custom');
+                    setTracks(prev => prev.map(t => ({
+                      ...t,
+                      custom_folder: clean,
+                      playlist_name: clean,
+                      folder_mode: 'custom'
+                    })));
+                    showToast(`กำหนดโฟลเดอร์ปลายทางเป็น "${clean}" เรียบร้อยแล้ว`, 'success');
+                  } else if (targetFolderChoice === 'single') {
+                    setFolderMode('single');
+                    setTracks(prev => prev.map(t => ({
+                      ...t,
+                      custom_folder: '',
+                      playlist_name: '',
+                      folder_mode: 'single'
+                    })));
+                    showToast('ตั้งค่าบันทึกรวมในโฟลเดอร์หลัก downloads โดยตรง', 'info');
+                  } else {
+                    setFolderMode('playlist');
+                    showToast('ตั้งค่าแยกโฟลเดอร์ตามเพลย์ลิสต์/ชาร์ต', 'info');
+                  }
+                  setShowFolderPickerModal(false);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold text-xs shadow-lg shadow-emerald-950/40 transition active:scale-95 flex items-center gap-1.5"
+              >
+                <span>✓</span>
+                <span>ยืนยันโฟลเดอร์</span>
               </button>
             </div>
           </div>
