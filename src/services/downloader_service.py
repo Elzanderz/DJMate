@@ -605,6 +605,10 @@ class DownloaderService:
                             info = ydl.extract_info(vid_url, download=True)
                             if info:
                                 download_success = True
+                                if not track_info.get('cover_url') or track_info.get('cover_url', '').startswith('data:'):
+                                    yt_thumb = info.get('thumbnail') or (info.get('thumbnails') and info['thumbnails'][-1].get('url'))
+                                    if yt_thumb:
+                                        track_info['cover_url'] = yt_thumb
                                 break
                     except Exception as dl_err:
                         print(f"[DownloaderService] Candidate download fallback: {dl_err}")
@@ -640,6 +644,10 @@ class DownloaderService:
                                                 info = ydl.extract_info(f"https://www.youtube.com/watch?v={fbe['id']}", download=True)
                                                 if info:
                                                     download_success = True
+                                                    if not track_info.get('cover_url') or track_info.get('cover_url', '').startswith('data:'):
+                                                        yt_thumb = info.get('thumbnail') or (info.get('thumbnails') and info['thumbnails'][-1].get('url'))
+                                                        if yt_thumb:
+                                                            track_info['cover_url'] = yt_thumb
                                                     break
                             if download_success:
                                 break
@@ -758,15 +766,16 @@ class DownloaderService:
             # 3. Run DJ Analysis with metadata
             from .dj_analyzer_service import DJAnalyzerService
             dj_data = DJAnalyzerService.analyze_file(actual_file, track_info=track_info)
-            track_info['bpm'] = dj_data.get('bpm', 120.0)
-            track_info['camelot'] = dj_data.get('camelot', '8A')
-            track_info['key_name'] = dj_data.get('key_name', 'A Min')
-            track_info['genre'] = dj_data.get('genre', 'Dance / DJ')
-            track_info['color'] = dj_data.get('color', '#fb923c')
-            track_info['energy'] = dj_data.get('energy', 6)
-            track_info['stars'] = dj_data.get('stars', 3)
-            track_info['rating_255'] = dj_data.get('rating_255', 153)
-            track_info['cues'] = dj_data.get('cues', [])
+            if dj_data:
+                track_info['bpm'] = dj_data.get('bpm') or track_info.get('bpm', 120.0)
+                track_info['camelot'] = dj_data.get('camelot') or track_info.get('camelot', '8A')
+                track_info['key_name'] = dj_data.get('key_name') or track_info.get('key_name', 'A Min')
+                track_info['genre'] = dj_data.get('genre') or track_info.get('genre', 'Pop / Hits')
+                track_info['color'] = dj_data.get('color', '#fb923c')
+                track_info['energy'] = dj_data.get('energy', 6)
+                track_info['stars'] = dj_data.get('stars', 3)
+                track_info['rating_255'] = dj_data.get('rating_255', 153)
+                track_info['cues'] = dj_data.get('cues', [])
 
             # 4. Folder Organization if configured
             folder_mode = track_info.get('folder_mode', 'single')

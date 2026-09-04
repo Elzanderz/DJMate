@@ -20,9 +20,11 @@ class TaggerService:
         if not cover_url:
             try:
                 from .history_service import HistoryService
-                q = f"{metadata.get('artist', '')} {metadata.get('title', '')}".strip()
+                art = (metadata.get('artist') or '').strip()
+                tit = (metadata.get('title') or '').strip()
+                q = f"{art} {tit}".strip()
                 if q:
-                    cover_url = HistoryService._fetch_itunes_cover(q)
+                    cover_url = HistoryService._fetch_itunes_cover(q, expected_artist=art, expected_title=tit)
                     if cover_url:
                         metadata['cover_url'] = cover_url
             except Exception:

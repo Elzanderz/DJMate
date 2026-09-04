@@ -170,11 +170,11 @@ class HistoryService:
         clean_search = re.sub(r'\s*\[[^\]]*\]', '', clean_search)
         query = f"{clean_artist} {clean_search}".strip() if clean_artist else clean_search.strip()
         if query:
-            res = cls._fetch_itunes_cover(query)
+            res = cls._fetch_itunes_cover(query, expected_artist=clean_artist, expected_title=clean_title)
             if res:
                 return res
         if clean_artist and clean_artist != query:
-            res = cls._fetch_itunes_cover(clean_artist)
+            res = cls._fetch_itunes_cover(clean_artist, expected_artist=clean_artist)
             if res:
                 return res
         return ""
@@ -210,17 +210,37 @@ class HistoryService:
                 return ""
 
     @staticmethod
-    def _fetch_itunes_cover(query: str) -> str:
+    def _fetch_itunes_cover(query: str, expected_artist: str = '', expected_title: str = '') -> str:
         try:
             import urllib.request
             import urllib.parse
-            url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query)}&entity=song&limit=1"
+            import re
+            url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query)}&entity=song&limit=5"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=2.5) as resp:
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-                if data.get('resultCount', 0) > 0:
-                    art = data['results'][0].get('artworkUrl100', '')
-                    return art.replace('100x100bb', '300x300bb')
+                for item in data.get('results', []):
+                    art_name = item.get('artistName', '')
+                    # Validate artist: reject mismatched artist covers
+                    if expected_artist:
+                        c_exp = re.sub(r'[\s\W_]+', '', expected_artist.lower())
+                        c_art = re.sub(r'[\s\W_]+', '', art_name.lower())
+                        if c_exp and c_art and (c_exp not in c_art and c_art not in c_exp):
+                            continue
+                    art = item.get('artworkUrl100', '')
+                    if art:
+                        return art.replace('100x100bb', '600x600bb')
+
+            # If track search didn't match artist, search for artist's own album artwork
+            if expected_artist:
+                url_a = f"https://itunes.apple.com/search?term={urllib.parse.quote(expected_artist)}&entity=album&limit=1"
+                req_a = urllib.request.Request(url_a, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req_a, timeout=2.5) as resp_a:
+                    data_a = json.loads(resp_a.read().decode('utf-8'))
+                    if data_a.get('resultCount', 0) > 0:
+                        art = data_a['results'][0].get('artworkUrl100', '')
+                        if art:
+                            return art.replace('100x100bb', '600x600bb')
         except Exception:
             pass
         return ""
