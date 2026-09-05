@@ -95,12 +95,28 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        python_bins.push("/Library/Developer/CommandLineTools/usr/bin/python3".to_string());
+        // 1. PATH binaries first
         python_bins.push("python3".to_string());
+        python_bins.push("python".to_string());
+
+        // 2. User & system Conda/Anaconda/Miniconda environments
+        if let Ok(home) = std::env::var("HOME") {
+            python_bins.push(format!("{}/opt/anaconda3/bin/python3", home));
+            python_bins.push(format!("{}/anaconda3/bin/python3", home));
+            python_bins.push(format!("{}/opt/miniconda3/bin/python3", home));
+            python_bins.push(format!("{}/miniconda3/bin/python3", home));
+            python_bins.push(format!("{}/.pyenv/shims/python3", home));
+        }
+        python_bins.push("/opt/anaconda3/bin/python3".to_string());
+        python_bins.push("/opt/miniconda3/bin/python3".to_string());
+
+        // 3. Homebrew (Apple Silicon & Intel)
         python_bins.push("/opt/homebrew/bin/python3".to_string());
         python_bins.push("/usr/local/bin/python3".to_string());
+
+        // 4. System / Xcode Command Line Tools fallbacks
         python_bins.push("/usr/bin/python3".to_string());
-        python_bins.push("python".to_string());
+        python_bins.push("/Library/Developer/CommandLineTools/usr/bin/python3".to_string());
     }
 
     let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
