@@ -361,6 +361,21 @@ class HistoryService:
                         t['cover_url'] = cov
                         needs_save = True
 
+                # Auto-heal generic 'Dance' or missing genre in existing tracks
+                cur_g = t.get('genre')
+                if not cur_g or cur_g in ('Dance', 'Electronic / Dance', 'Dance / DJ', 'Unknown', 'Pop / Hits'):
+                    from .genre_classifier_service import GenreClassifierService
+                    new_g = GenreClassifierService.classify(t.get('artist', ''), t.get('title', ''), float(t.get('bpm', 120.0)), playlist=t.get('playlist_name', ''))
+                    if new_g and new_g != cur_g:
+                        t['genre'] = new_g
+                        needs_save = True
+                        if resolved_fp and os.path.exists(resolved_fp):
+                            try:
+                                from .tagger_service import TaggerService
+                                TaggerService.apply_tags(resolved_fp, t)
+                            except Exception:
+                                pass
+
                 updated_list.append(t)
             else:
                 # File no longer exists on disk anywhere in downloads -> removed
@@ -382,11 +397,11 @@ class HistoryService:
 
             bpm = 128.0
             camelot = '8A'
-            genre = 'Dance / DJ'
             dur_ms = 180000
             album = ''
             year = ''
             cover_url = ''
+            genre = ''
 
             try:
                 if abs_fp.lower().endswith('.mp3'):
@@ -407,6 +422,11 @@ class HistoryService:
                         genre = str(tags.get('TCON'))
             except Exception:
                 pass
+
+            playlist_name = file_info['playlist_name']
+            if not genre or genre in ('Dance', 'Electronic / Dance', 'Dance / DJ', 'Unknown', 'Pop / Hits'):
+                from .genre_classifier_service import GenreClassifierService
+                genre = GenreClassifierService.classify(artist, title, bpm, playlist=playlist_name)
 
             cover_url = cls.extract_cover(abs_fp, artist, title, fetch_online=True)
             playlist_name = file_info['playlist_name']

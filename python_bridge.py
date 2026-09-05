@@ -161,6 +161,13 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
             if not tracks:
                 tracks = spotify_service.get_info(url)
         
+        # Enrich / classify genres for all tracks so queue never falls back to generic Dance
+        from src.services.genre_classifier_service import GenreClassifierService
+        for t in tracks:
+            g = t.get('genre')
+            if not g or g in ('Unknown', 'Dance', 'Electronic / Dance', 'Dance / DJ', 'Custom / DJ', 'YouTube / DJ', 'Pop / Hits'):
+                t['genre'] = GenreClassifierService.classify(t.get('artist', ''), t.get('title', ''), playlist=t.get('playlist_name', ''))
+
         # Deduplication check: mark tracks already present in local library
         tracks = HistoryService.mark_existing_tracks(tracks)
         return {'result': tracks}

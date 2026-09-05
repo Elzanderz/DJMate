@@ -46,7 +46,8 @@ class DJExportersService:
             ET.SubElement(entry, 'TEMPO', BPM=bpm_val, BPM_QUALITY='100.000000')
             
             # Musical Key info
-            ET.SubElement(entry, 'INFO', KEY=t.get('camelot', '8A'), GENRE=t.get('genre', 'Dance'))
+            genre_val = t.get('genre') if t.get('genre') and t.get('genre') not in ('Dance', 'Electronic / Dance', 'Dance / DJ', 'Unknown') else (t.get('genre') or 'Pop')
+            ET.SubElement(entry, 'INFO', KEY=t.get('camelot', '8A'), GENRE=genre_val)
             
             # Cues
             for cue in t.get('cues', []):
@@ -94,7 +95,7 @@ class DJExportersService:
                 Key=t.get('camelot', '8A'),
                 Title=t.get('title', ''),
                 Author=t.get('artist', ''),
-                Genre=t.get('genre', 'Dance')
+                Genre=t.get('genre') or 'Pop'
             )
             for cue in t.get('cues', []):
                 ET.SubElement(song, 'Poi', Type='cue', Pos=str(int(cue.get('start', 0.0) * 1000)), Name=cue.get('name', 'Cue'))

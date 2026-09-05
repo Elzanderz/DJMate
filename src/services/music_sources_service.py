@@ -3,6 +3,7 @@ import re
 import json
 import requests
 from typing import List, Dict, Optional
+from .genre_classifier_service import GenreClassifierService
 
 class SoundCloudService:
     headers = {
@@ -76,7 +77,7 @@ class SoundCloudService:
                         'album': playlist_title if is_set else (uploader or 'SoundCloud Release'),
                         'duration_ms': duration_ms,
                         'cover_url': thumb,
-                        'genre': entry.get('genre') or 'Electronic / Dance',
+                        'genre': entry.get('genre') if entry.get('genre') and entry.get('genre').lower() not in ('dance', 'electronic', 'all') else GenreClassifierService.classify(artist or 'SoundCloud Artist', title_clean, playlist=playlist_title),
                         'camelot': '8A',
                         'bpm': 126.0,
                         'stars': 4,
@@ -163,7 +164,7 @@ class BandcampService:
                         'album': album_title,
                         'duration_ms': int(dur_sec * 1000),
                         'cover_url': thumb,
-                        'genre': 'Underground / Electronic',
+                        'genre': GenreClassifierService.classify(entry_artist or 'Bandcamp Artist', title, playlist=album_title),
                         'camelot': '8A',
                         'bpm': 125.0,
                         'stars': 4,
@@ -230,7 +231,7 @@ class AppleMusicService:
                                             'album': playlist_name,
                                             'duration_ms': 180000,
                                             'cover_url': img,
-                                            'genre': 'Pop / Dance',
+                                            'genre': GenreClassifierService.classify(t_artist or 'Apple Music Artist', t_name, playlist=playlist_name),
                                             'camelot': '8A',
                                             'bpm': 124.0,
                                             'stars': 4,

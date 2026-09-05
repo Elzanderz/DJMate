@@ -36,7 +36,8 @@ class RekordboxService:
 
             bpm_val = f"{float(t.get('bpm', 120.0)):.2f}"
             tonality = sanitize_for_xml(t.get('camelot') or t.get('key_name', ''))
-            genre = sanitize_for_xml(t.get('genre', 'Dance / DJ'))
+            genre_raw = t.get('genre') if t.get('genre') and t.get('genre') not in ('Dance', 'Electronic / Dance', 'Dance / DJ', 'Unknown') else (t.get('genre') or 'Pop')
+            genre = sanitize_for_xml(genre_raw)
             duration_sec = str(int(t.get('duration_ms', 180000) / 1000))
             year = str(t.get('year', ''))
             

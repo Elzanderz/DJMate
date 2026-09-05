@@ -7,6 +7,7 @@ import unicodedata
 import requests
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from .genre_classifier_service import GenreClassifierService
 
 class MusicSearchService:
     @staticmethod
@@ -214,7 +215,7 @@ class MusicSearchService:
                         'cover_url': cover,
                         'preview_url': preview_url,
                         'year': '',
-                        'genre': 'Dance / Pop',
+                        'genre': GenreClassifierService.classify(a_name, t_name),
                         'source': 'Deezer',
                         'search_query': f"{a_name} - {t_name}" if a_name else t_name,
                         'raw_source': 'deezer'
@@ -280,7 +281,7 @@ class MusicSearchService:
                             'preview_url': '',
                             'youtube_url': url,
                             'year': '',
-                            'genre': 'YouTube / DJ',
+                            'genre': GenreClassifierService.classify(artist, title),
                             'source': 'YouTube',
                             'search_query': f"{artist} - {title}" if artist else title,
                             'raw_source': 'youtube'
@@ -331,7 +332,7 @@ class MusicSearchService:
                             artist = parts[0].strip()
                             title = parts[1].strip()
 
-                        genre = entry.get('genre') or 'Electronic / Club'
+                        genre = entry.get('genre') if entry.get('genre') and entry.get('genre').lower() not in ('dance', 'electronic', 'all') else GenreClassifierService.classify(artist or 'SoundCloud Producer', title)
 
                         results.append({
                             'id': f"sc_{entry.get('id', idx)}",

@@ -143,9 +143,9 @@ class DJAnalyzerService:
         from .genre_classifier_service import GenreClassifierService
 
         # 1. Existing or classified genre
-        genre = track_info.get('genre') if track_info and track_info.get('genre') and track_info.get('genre') not in ('Unknown', 'Custom / DJ', 'Electronic', 'Dance') else None
+        genre = track_info.get('genre') if track_info and track_info.get('genre') and track_info.get('genre') not in ('Unknown', 'Custom / DJ', 'Electronic', 'Dance', 'Electronic / Dance', 'Dance / DJ', 'Pop / Hits') else None
         if not genre:
-            genre = GenreClassifierService.classify(artist_name, title_name, float(track_info.get('bpm', 0)) if track_info and track_info.get('bpm') else 120.0)
+            genre = GenreClassifierService.classify(artist_name, title_name, float(track_info.get('bpm', 0)) if track_info and track_info.get('bpm') else 120.0, playlist=track_info.get('playlist_name', '') if track_info else '')
 
         # 2. Existing or estimated BPM
         bpm = 0.0
@@ -305,9 +305,9 @@ class DJAnalyzerService:
             from .genre_classifier_service import GenreClassifierService
             artist_name = track_info.get('artist', '') if track_info else ''
             title_name = track_info.get('title', '') if track_info else ''
-            genre = track_info.get('genre') if track_info and track_info.get('genre') and track_info.get('genre') not in ('Unknown', 'Custom / DJ', 'Electronic', 'Dance') else None
+            genre = track_info.get('genre') if track_info and track_info.get('genre') and track_info.get('genre') not in ('Unknown', 'Custom / DJ', 'Electronic', 'Dance', 'Electronic / Dance', 'Dance / DJ', 'Pop / Hits') else None
             if not genre:
-                genre = GenreClassifierService.classify(artist_name, title_name, bpm)
+                genre = GenreClassifierService.classify(artist_name, title_name, bpm, playlist=track_info.get('playlist_name', '') if track_info else '')
 
             # Prioritize official studio metadata if available
             if track_info:

@@ -770,7 +770,7 @@ class DownloaderService:
                 track_info['bpm'] = dj_data.get('bpm') or track_info.get('bpm', 120.0)
                 track_info['camelot'] = dj_data.get('camelot') or track_info.get('camelot', '8A')
                 track_info['key_name'] = dj_data.get('key_name') or track_info.get('key_name', 'A Min')
-                track_info['genre'] = dj_data.get('genre') or track_info.get('genre', 'Pop / Hits')
+                track_info['genre'] = dj_data.get('genre') or track_info.get('genre') or 'Pop'
                 track_info['color'] = dj_data.get('color', '#fb923c')
                 track_info['energy'] = dj_data.get('energy', 6)
                 track_info['stars'] = dj_data.get('stars', 3)
