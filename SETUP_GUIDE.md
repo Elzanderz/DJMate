@@ -28,10 +28,10 @@
 1. เปิด **Terminal** บน Mac
 2. วางคำสั่งนี้แล้วกด **Enter**:
    ```bash
-   pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg
+   pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg spotdl
    ```
    *(💡 หรือติดตั้ง ffmpeg ด้วย Homebrew: `brew install ffmpeg`)*
-   *(💡 หาก Mac แจ้งเตือนเรื่อง externally-managed ให้ใส่ flag เพิ่ม: `pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg --break-system-packages`)*
+   *(💡 หาก Mac แจ้งเตือนเรื่อง externally-managed ให้ใส่ flag เพิ่ม: `pip3 install requests yt-dlp mutagen urllib3 pillow numpy imageio-ffmpeg spotdl --break-system-packages`)*
 
 ---
 

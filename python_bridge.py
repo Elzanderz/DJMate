@@ -57,7 +57,7 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
             'output_dir': output_dir,
             'modules': {}
         }
-        for mod in ('yt_dlp', 'mutagen', 'requests', 'urllib3', 'PIL', 'numpy'):
+        for mod in ('yt_dlp', 'mutagen', 'requests', 'urllib3', 'PIL', 'numpy', 'spotdl'):
             try:
                 __import__(mod)
                 health['modules'][mod] = True
@@ -66,7 +66,7 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
         return {'result': health}
 
     elif cmd_name == 'install_missing_modules':
-        packages = ['pillow', 'numpy', 'imageio-ffmpeg', 'mutagen', 'yt-dlp', 'requests', 'urllib3']
+        packages = ['pillow', 'numpy', 'imageio-ffmpeg', 'mutagen', 'yt-dlp', 'requests', 'urllib3', 'spotdl']
         results = {}
         for pkg in packages:
             try:

@@ -353,8 +353,8 @@ class SpotifyService:
                                 })
                             if all_tracks:
                                 return all_tracks
-                except Exception:
-                    pass
+                except Exception as ex:
+                    print(f"[SpotifyService] SpotifyClient pagination notice: {ex}")
 
         # Fallback 1: Auto-Healing Spotify Embed Extractor
         for cid in candidate_ids:
