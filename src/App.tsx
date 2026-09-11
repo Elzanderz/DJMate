@@ -1,7 +1,29 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { SmartSearchModal } from './ui/SmartSearchModal';
+import { MusicMateHeroBar, MusicMateFilterState } from './ui/MusicMateHeroBar';
+import { MusicMateEnergyCurve } from './ui/MusicMateEnergyCurve';
+import { MinimalLogo } from './ui/MinimalLogo';
+import { LiveCopilotModal } from './ui/LiveCopilotModal';
+import {
+  Search,
+  Sparkles,
+  ListMusic,
+  Video,
+  Library,
+  Layers,
+  Flame,
+  History,
+  Compass,
+  Wand2,
+  FileSpreadsheet,
+  FileAudio,
+  Settings,
+  ExternalLink,
+  Headphones,
+  Radio,
+} from 'lucide-react';
 
 // Robust Thai & International text normalization helper
 export function normalizeThaiString(str: string): string {
@@ -44,6 +66,7 @@ interface Track {
   source?: string;
   duration_ms?: number;
   cover_url?: string;
+  preview_url?: string;
   bpm?: number;
   camelot?: string;
   key_name?: string;
@@ -235,8 +258,8 @@ const getHarmonicTransition = (fromTrack: Track, toTrack: Track): TransitionInfo
 };
 
 export default function App() {
-  // Navigation Tabs: 'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups' | 'activity'
-  const [activeTab, setActiveTab] = useState<'queue' | 'yt_extractor' | 'library' | 'mixtape' | 'crates' | 'mashups' | 'activity'>('queue');
+  // Navigation Tabs: 'mixtape' | 'queue' | 'yt_extractor' | 'library' | 'crates' | 'mashups' | 'activity'
+  const [activeTab, setActiveTab] = useState<'mixtape' | 'queue' | 'yt_extractor' | 'library' | 'crates' | 'mashups' | 'activity'>('mixtape');
 
   // Activity History State
   const [activities, setActivities] = useState<any[]>([]);
@@ -405,6 +428,7 @@ export default function App() {
   const [libSearch, setLibSearch] = useState('');
   const [libFilterKey, setLibFilterKey] = useState('ALL');
   const [libFilterStars, setLibFilterStars] = useState<number | 'ALL'>('ALL');
+  const [showLiveCopilotModal, setShowLiveCopilotModal] = useState<boolean>(false);
 
   // Smart Mixtape Studio
   const [mixtapeTracks, setMixtapeTracks] = useState<Track[]>([]);
@@ -421,6 +445,13 @@ export default function App() {
   const [isScanningShazam, setIsScanningShazam] = useState(false);
   const [isAuditioningMix, setIsAuditioningMix] = useState(false);
   const [auditionIndex, setAuditionIndex] = useState(0);
+
+  // MusicMate AI State
+  const [isGeneratingMusicMate, setIsGeneratingMusicMate] = useState(false);
+  const [musicMateLastPrompt, setMusicMateLastPrompt] = useState('');
+  const [selectedCurveTrackIndex, setSelectedCurveTrackIndex] = useState<number | undefined>(undefined);
+  const [isRerollingTrackIndex, setIsRerollingTrackIndex] = useState<number | null>(null);
+  const [mixtapeViewMode, setMixtapeViewMode] = useState<'set' | 'library'>('set');
 
   // Audio Preview Player
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
@@ -825,11 +856,28 @@ export default function App() {
         }
       };
 
-      const onError = (e: Event) => {
-        console.warn(`Deck ${deckId} audio error, skipping to next track:`, e);
+      const onError = async (e: Event) => {
+        console.warn(`Deck ${deckId} audio error:`, e);
         if (activeDeckRef.current === deckId) {
+          const trk = activeTrackRef.current;
+          if (trk?.filepath && deck.src && !deck.src.startsWith('data:')) {
+            try {
+              console.log("Attempting base64 data URL audio recovery...");
+              const res: any = await invokeBackend('get_audio_data_url', { filepath: trk.filepath });
+              const fallbackSrc = typeof res === 'string' ? res : (res?.result || res?.dataUrl || '');
+              if (fallbackSrc) {
+                deck.src = fallbackSrc;
+                deck.currentTime = 0;
+                deck.volume = getEffectiveVolume();
+                await deck.play();
+                return;
+              }
+            } catch (err2) {
+              console.error("Data URL fallback in onError failed:", err2);
+            }
+          }
           stopCrossfade();
-          setTimeout(() => handlePlayNext(false), 600);
+          setTimeout(() => handlePlayNext(false), 800);
         }
       };
 
@@ -1049,87 +1097,61 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       onPointerLeave={() => { if (!isDragging) setHoverTime(null); }}
       className="relative w-full h-11 flex items-center cursor-pointer select-none px-1 group touch-none"
     >
-      {/* Symmetrical Waveform with 3-Band Rekordbox Frequency Colors */}
+      {/* Symmetrical Waveform with Beatport Cyan & White Active Window */}
       <div className="w-full h-full flex items-center justify-between gap-[1px]">
         {waveformBars.map((b) => {
           const isPassed = (b.pos * 100) <= progressPct;
+          const isInActiveWindow = progressPct > 3 && (b.pos * 100) >= (progressPct - 4.5) && (b.pos * 100) <= progressPct;
+
+          let barColor = 'bg-[#0369a1]/30 group-hover:bg-[#0284c7]/45'; // Unplayed ocean cyan
+          if (isInActiveWindow) {
+            barColor = 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]'; // Active window pure white
+          } else if (isPassed) {
+            barColor = 'bg-[#00e5ff] shadow-[0_0_4px_rgba(0,229,255,0.4)]'; // Played vibrant cyan
+          }
 
           return (
             <div
               key={b.idx}
-              style={{ height: `${b.totalH}%` }}
-              className="flex-1 min-w-[1px] flex flex-col justify-between items-center rounded-full overflow-hidden"
-            >
-              {/* Top High Frequency Tip */}
-              <div
-                style={{ height: `${b.highRatio * 50}%` }}
-                className={`w-full rounded-t-full ${
-                  isPassed
-                    ? 'bg-cyan-200'
-                    : 'bg-cyan-500/25 group-hover:bg-cyan-400/40'
-                }`}
-              />
-              {/* Mid Vocals / Melody Layer */}
-              <div
-                style={{ height: `${b.midRatio * 100}%` }}
-                className={`w-full ${
-                  isPassed
-                    ? 'bg-amber-400'
-                    : 'bg-amber-500/30 group-hover:bg-amber-400/45'
-                }`}
-              />
-              {/* Low Center Bass / Kick Core */}
-              <div
-                style={{ height: `${b.lowRatio * 100}%` }}
-                className={`w-full ${
-                  isPassed
-                    ? 'bg-blue-500'
-                    : 'bg-blue-600/35 group-hover:bg-blue-500/50'
-                }`}
-              />
-              {/* Bottom High Frequency Tip */}
-              <div
-                style={{ height: `${b.highRatio * 50}%` }}
-                className={`w-full rounded-b-full ${
-                  isPassed
-                    ? 'bg-cyan-200'
-                    : 'bg-cyan-500/25 group-hover:bg-cyan-400/40'
-                }`}
-              />
-            </div>
+              style={{ height: `${Math.max(14, b.totalH)}%` }}
+              className={`flex-1 min-w-[1px] rounded-full transition-colors duration-75 ${barColor}`}
+            />
           );
         })}
       </div>
 
       {/* Recommended Mix-In / Out & Hot Cue Flags */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Intro Mix-In Marker (🟢 In) */}
+        {/* Intro Mix-In Marker */}
         <div className="absolute left-[1%] top-0 flex items-center gap-0.5" title="Mix-In (Intro 32-Beat)">
-          <span className="w-2 h-2 bg-emerald-400 rounded-b-sm" />
+          <span className="w-1.5 h-3 bg-white/40 rounded-b-sm" />
         </div>
 
-        {/* Vocals Marker (🎤 Vocals) */}
-        <div className="absolute left-[18%] top-0" title="Vocals (เนื้อร้อง)">
-          <span className="w-1.5 h-1.5 bg-amber-400 rounded-b-sm" />
+        {/* Drop Marker */}
+        <div style={{ left: `${dropPct}%` }} className="absolute top-0 flex items-center gap-0.5" title="Main Drop">
+          <span className="w-1.5 h-3 bg-white/60 rounded-b-sm" />
         </div>
 
-        {/* Drop Marker (⚡ Drop) */}
-        <div style={{ left: `${dropPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Main Drop / Bass (${Math.floor(dropSec/60)}:${Math.floor(dropSec%60)<10?'0':''}${Math.floor(dropSec%60)})`}>
-          <span className="w-2 h-2 bg-sky-400 rounded-b-sm" />
-        </div>
-
-        {/* Outro Mix-Out Marker (🔴 Out) */}
-        <div style={{ left: `${mixOutPct}%` }} className="absolute top-0 flex items-center gap-0.5" title={`Mix-Out (Outro ${Math.floor(outroSec/60)}:${Math.floor(outroSec%60)<10?'0':''}${Math.floor(outroSec%60)})`}>
-          <span className="w-2 h-2 bg-rose-500 rounded-b-sm" />
+        {/* Outro Mix-Out Marker */}
+        <div style={{ left: `${mixOutPct}%` }} className="absolute top-0 flex items-center gap-0.5" title="Mix-Out">
+          <span className="w-1.5 h-3 bg-white/40 rounded-b-sm" />
         </div>
       </div>
+
+      {/* Active Window Start Boundary Line */}
+      {progressPct > 4.5 && (
+        <div
+          style={{ left: `${Math.max(0, progressPct - 4.5)}%`, transform: 'translateX(-50%)' }}
+          className="absolute top-0 bottom-0 w-[2px] bg-white pointer-events-none z-10 opacity-90 shadow-[0_0_6px_rgba(255,255,255,0.8)]"
+        />
+      )}
 
       {/* Clean White Playhead Needle */}
       <div
         style={{ left: `${progressPct}%`, transform: 'translateX(-50%)' }}
-        className="absolute top-0 bottom-0 w-[2px] bg-white pointer-events-none z-10 will-change-transform"
+        className="absolute top-0 bottom-0 w-[2px] bg-white pointer-events-none z-10 will-change-transform shadow-[0_0_8px_rgba(255,255,255,0.95)]"
       >
-        <div className="w-2.5 h-2.5 bg-white rounded-full -ml-[4px] -top-1 absolute shadow-sm" />
+        <div className="w-1.5 h-1.5 bg-white rounded-full -ml-[2px] -top-0.5 absolute shadow-sm" />
       </div>
 
       {/* Hover Time, Bar & Section Tooltip */}
@@ -1309,15 +1331,29 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       return;
     }
 
-    if (!t.filepath) {
-      showToast('Download track first to preview audio', 'info');
-      return;
+    let audioSrc = '';
+    if (t.filepath) {
+      try {
+        if (typeof convertFileSrc === 'function') {
+          audioSrc = convertFileSrc(t.filepath);
+        }
+      } catch (e) {
+        console.warn("convertFileSrc error:", e);
+      }
+      if (!audioSrc) {
+        try {
+          const res: any = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
+          audioSrc = typeof res === 'string' ? res : (res?.result || res?.dataUrl || '');
+        } catch (e) {
+          console.error("get_audio_data_url error:", e);
+        }
+      }
+    } else if (t.preview_url) {
+      audioSrc = t.preview_url;
     }
 
-    const dataUrl = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
-    if (!dataUrl) {
-      showToast(`Cannot load audio for "${t.title}". Skipping to next track...`, 'info');
-      setTimeout(() => handlePlayNext(false), 600);
+    if (!audioSrc) {
+      showToast('กรุณาดาวน์โหลดเพลงก่อนเปิดฟัง (เพลงยังไม่ได้ดาวน์โหลดลงเครื่อง)', 'info');
       return;
     }
 
@@ -1330,7 +1366,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       // Immediately switch active deck to the new incoming deck
       activeDeckRef.current = activeDeckRef.current === 'A' ? 'B' : 'A';
 
-      newDeck.src = dataUrl;
+      newDeck.src = audioSrc;
       newDeck.currentTime = 0;
       newDeck.volume = 0;
 
@@ -1383,7 +1419,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     standbyDeck.currentTime = 0;
     standbyDeck.volume = 0;
 
-    currentDeck.src = dataUrl;
+    currentDeck.src = audioSrc;
     currentDeck.currentTime = 0;
     currentDeck.volume = effectiveVol;
     setCurrentTime(0);
@@ -1394,7 +1430,21 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
     try {
       await currentDeck.play();
     } catch (e) {
-      console.error("Direct playback error", e);
+      console.warn("Direct playback error with asset url, trying base64 fallback:", e);
+      if (t.filepath && !audioSrc.startsWith('data:')) {
+        try {
+          const res: any = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
+          const fallbackSrc = typeof res === 'string' ? res : (res?.result || res?.dataUrl || '');
+          if (fallbackSrc) {
+            currentDeck.src = fallbackSrc;
+            await currentDeck.play();
+            return;
+          }
+        } catch (err2) {
+          console.error("Fallback playback error:", err2);
+        }
+      }
+      showToast(`ไม่สามารถเล่นเพลง "${t.title}" ได้`, 'error');
     }
   };
 
@@ -1456,10 +1506,21 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       return;
     }
 
-    const dataUrl = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
-    if (dataUrl) {
+    let audioSrc = '';
+    try {
+      if (t.filepath && typeof convertFileSrc === 'function') {
+        audioSrc = convertFileSrc(t.filepath);
+      }
+    } catch (e) {}
+    if (!audioSrc && t.filepath) {
+      try {
+        const res: any = await invokeBackend('get_audio_data_url', { filepath: t.filepath });
+        audioSrc = typeof res === 'string' ? res : (res?.result || res?.dataUrl || '');
+      } catch (e) {}
+    }
+    if (audioSrc) {
       const cur = getCurrentDeck();
-      cur.src = dataUrl;
+      cur.src = audioSrc;
       setActiveTrack(t);
       setIsPlaying(true);
 
@@ -2152,6 +2213,69 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       showToast('Error building mixtape: ' + e, 'error');
     } finally {
       setIsBuildingMixtape(false);
+    }
+  };
+
+  const handleGenerateMusicMateSet = async (userPrompt: string, filterState: MusicMateFilterState) => {
+    setIsGeneratingMusicMate(true);
+    setMusicMateLastPrompt(userPrompt);
+    try {
+      showToast(`⚡ MusicMate AI is curating a ${filterState.genre} set (${filterState.durationMinutes} mins)...`, 'info');
+      const res = await invokeBackend('generate_ai_playlist', {
+        prompt: userPrompt,
+        duration_minutes: filterState.durationMinutes,
+        mixtape_mode: filterState.energyCurve,
+        commercial_level: filterState.commercialLevel,
+        reference_tracks: filterState.referenceTrack ? [filterState.referenceTrack] : [],
+      });
+
+      const setlist = res?.result || res || {};
+      const newTracks: Track[] = setlist.tracks || [];
+
+      if (newTracks.length > 0) {
+        setMixtapeTracks(newTracks);
+        setMixtapeViewMode('set');
+        if (setlist.setlist_title) {
+          setMixtapeTitle(setlist.setlist_title);
+        }
+        showToast(`🎉 Created ${newTracks.length} tracks AI DJ Set (${filterState.genre}) with Harmonic & Energy Flow!`, 'success');
+      } else {
+        showToast('AI Curator did not return any tracks for this prompt', 'error');
+      }
+    } catch (e: any) {
+      console.error('MusicMate Generation Error:', e);
+      showToast(`Error generating set: ${e.message || e}`, 'error');
+    } finally {
+      setIsGeneratingMusicMate(false);
+    }
+  };
+
+  const handleRerollMixtapeTrack = async (idx: number) => {
+    const targetTrack = mixtapeTracks[idx];
+    if (!targetTrack) return;
+    setIsRerollingTrackIndex(idx);
+    try {
+      showToast(`🎲 Finding harmonic alternative for #${idx + 1} (${targetTrack.camelot || '8A'})...`, 'info');
+      const res = await invokeBackend('reroll_ai_track', {
+        track: targetTrack,
+        prompt: musicMateLastPrompt || targetTrack.genre || 'dance',
+        existing_tracks: mixtapeTracks,
+      });
+      const newTrack: Track = res?.result || res;
+      if (newTrack && newTrack.title) {
+        setMixtapeTracks((prev) => {
+          const updated = [...prev];
+          updated[idx] = { ...newTrack, track_number: idx + 1 };
+          return updated;
+        });
+        showToast(`✓ Swapped with "${newTrack.artist} - ${newTrack.title}" (${newTrack.camelot})`, 'success');
+      } else {
+        showToast('No alternative found', 'info');
+      }
+    } catch (e: any) {
+      showToast(`Reroll failed: ${e.message || e}`, 'error');
+    } finally {
+      setIsRerollingTrackIndex(null);
     }
   };
 
@@ -3025,49 +3149,29 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
   return (
     <div
       onContextMenu={(e) => handleOpenContextMenu(e, null, 'general')}
-      className="flex h-screen w-screen bg-[#121212] text-zinc-200 select-none overflow-hidden font-sans"
+      className="flex h-screen w-screen bg-black text-zinc-200 select-none overflow-hidden font-sans"
     >
       
       {/* ================= LEFT SIDEBAR (Spotify / Rekordbox Clean Style) ================= */}
       <aside className="w-64 bg-[#000000] border-r border-[#242424] flex flex-col p-3.5 flex-shrink-0 z-20">
         
         {/* Brand Header */}
-        <div className="flex items-center justify-between pb-3 pt-1 px-1 border-b border-[#242424] mb-3">
-          <div className="flex items-center gap-2.5">
-            {/* Minimalist Spotify Green Disc Logo */}
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black font-black text-sm shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer">
-              <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
-              </svg>
-            </div>
+        <div className="flex items-center justify-between pb-3 pt-1 px-1 border-b border-white/5 mb-3">
+          <MinimalLogo isPlaying={isPlaying} onClick={handleOpenFolder} />
 
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base tracking-tight text-white flex items-center">
-                  <span>DJ</span>
-                  <span className="text-[#1DB954] font-extrabold">mate</span>
-                </span>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#242424] text-[#1DB954] border border-[#1DB954]/30">
-                  PRO
-                </span>
-              </div>
-              <span className="text-[10px] text-[#727272] font-medium tracking-wide">
-                Harmonic DJ Suite
-              </span>
-            </div>
-          </div>
-
-          <button onClick={handleOpenFolder} title="Open Output Folder" className="text-[#727272] hover:text-white p-1.5 rounded-lg hover:bg-[#242424] transition text-xs">
-            ↗
+          <button
+            onClick={handleOpenFolder}
+            title="Open Output Folder"
+            className="text-zinc-500 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition active:scale-95"
+          >
+            <ExternalLink size={14} />
           </button>
         </div>
 
         {/* Global Search Bar */}
         <div className="relative mb-2.5">
-          <div className="absolute left-3 top-2.5 text-[#727272]">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
+          <div className="absolute left-3 top-2.5 text-zinc-500">
+            <Search size={14} />
           </div>
           <input
             type="text"
@@ -3086,7 +3190,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               }
             }}
             placeholder="ค้นหาเพลง / วางลิงก์..."
-            className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#282828] text-xs text-white pl-8 pr-12 py-2 rounded-full border border-transparent focus:border-white/20 focus:outline-none transition font-medium placeholder:text-[#727272]"
+            className="w-full bg-[#18181b] hover:bg-[#202024] focus:bg-[#242429] text-xs text-white pl-8 pr-12 py-2 rounded-xl border border-white/5 focus:border-emerald-500/40 focus:outline-none transition font-medium placeholder:text-zinc-500"
           />
           <button
             onClick={() => {
@@ -3096,7 +3200,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             className="absolute right-2 top-2 flex items-center gap-1 cursor-pointer hover:opacity-80 transition"
             title="กดเพื่อเปิดค้นหาเพลงอัจฉริยะ (Ctrl+F)"
           >
-            <span className="text-[10px] font-mono bg-[#181818] hover:text-white text-[#b3b3b3] px-1.5 py-0.5 rounded border border-[#333333] transition">
+            <span className="text-[10px] font-mono bg-zinc-900 hover:text-white text-zinc-400 px-1.5 py-0.5 rounded-md border border-white/10 transition">
               ⌘ F
             </span>
           </button>
@@ -3108,113 +3212,125 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
             setSmartSearchInitialQuery(url.trim());
             setShowSmartSearchModal(true);
           }}
-          className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer bg-[#181818] hover:bg-[#242424] text-[#b3b3b3] hover:text-white border border-[#282828] transition mb-3"
+          className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer bg-zinc-900/60 hover:bg-zinc-800/80 text-zinc-400 hover:text-white border border-white/5 transition mb-3 group"
         >
           <div className="flex items-center gap-2 text-xs font-semibold">
-            <span>🔍</span>
+            <Search size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
             <span>Smart Search (ค้นหาเพลง)</span>
           </div>
-          <span className="text-[9px] font-mono bg-[#282828] text-white px-1.5 py-0.5 rounded">
+          <span className="text-[9px] font-mono bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded-md border border-white/5">
             ในเครื่อง / โหลดเพิ่ม
           </span>
         </div>
 
         {/* Navigation Items */}
         <div className="space-y-1 text-xs font-semibold">
-          {/* Tab 1: Studio & Queue */}
+          {/* DJ Live Copilot (PulseDJ Mode) */}
           <div
-            onClick={() => setActiveTab('queue')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
-              activeTab === 'queue'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+            onClick={() => setShowLiveCopilotModal(true)}
+            className="relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition bg-gradient-to-r from-emerald-950/70 via-zinc-900 to-cyan-950/40 text-white font-bold border-l-2 border-emerald-400 shadow-md shadow-emerald-950/50 hover:from-emerald-900/60 hover:to-cyan-900/60 mb-2 group"
+            title="เปิดระบบแนะนำเพลงถัดไปแบบ Real-time (PulseDJ Mode) พร้อมหน้าต่างลอย Always on Top"
+          >
+            <div className="flex items-center gap-2.5">
+              <Radio size={15} className="text-emerald-400 animate-pulse group-hover:scale-110 transition-transform" />
+              <span className="font-extrabold tracking-wide">DJ Live Copilot</span>
+            </div>
+            <span className="text-[9px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-md border border-emerald-500/30">
+              PULSE
+            </span>
+          </div>
+
+          {/* Tab 1: AI DJ Set Generator (MusicMate) */}
+          <div
+            onClick={() => setActiveTab('mixtape')}
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+              activeTab === 'mixtape'
+                ? 'bg-gradient-to-r from-indigo-950/70 to-purple-950/50 text-white font-bold border-l-2 border-indigo-400 shadow-md shadow-indigo-950/50'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-              </svg>
+            <div className="flex items-center gap-2.5">
+              <Sparkles size={15} className="text-indigo-400" />
+              <span className="font-bold">AI DJ Set (MusicMate)</span>
+            </div>
+            <span className="text-[9px] font-mono font-bold bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-500/30">
+              NEW
+            </span>
+          </div>
+
+          {/* Tab 2: Studio & Queue */}
+          <div
+            onClick={() => setActiveTab('queue')}
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+              activeTab === 'queue'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-emerald-400'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <ListMusic size={15} className={activeTab === 'queue' ? 'text-emerald-400' : 'text-zinc-400'} />
               <span>Spotify / Beatport Queue</span>
             </div>
             {tracks.length > 0 && (
-              <span className="text-[10px] font-mono bg-[#242424] px-2 py-0.5 rounded-full text-white">
+              <span className="text-[10px] font-mono bg-zinc-800 px-2 py-0.5 rounded-full text-white border border-white/5">
                 {tracks.length}
               </span>
             )}
           </div>
 
-          {/* Tab 2: YouTube DJ Mixtape Extractor */}
+          {/* Tab 3: YouTube DJ Mixtape Extractor */}
           <div
             onClick={() => setActiveTab('yt_extractor')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
               activeTab === 'yt_extractor'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#ef4444]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-red-500'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-red-500 text-sm">▶</span>
+            <div className="flex items-center gap-2.5">
+              <Video size={15} className={activeTab === 'yt_extractor' ? 'text-red-400' : 'text-zinc-400'} />
               <span>YouTube DJ Extractor</span>
             </div>
           </div>
 
-          {/* Tab 3: Track Library */}
+          {/* Tab 4: Track Library */}
           <div
             onClick={() => {
               setActiveTab('library');
               refreshLibrary();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
               activeTab === 'library'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-emerald-400'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-              </svg>
+            <div className="flex items-center gap-2.5">
+              <Library size={15} className={activeTab === 'library' ? 'text-emerald-400' : 'text-zinc-400'} />
               <span>Track Library</span>
             </div>
             {libraryTracks.length > 0 && (
-              <span className="text-[10px] font-mono bg-[#242424] px-2 py-0.5 rounded-full text-white">
+              <span className="text-[10px] font-mono bg-zinc-800 px-2 py-0.5 rounded-full text-white border border-white/5">
                 {libraryTracks.length}
               </span>
             )}
           </div>
 
-          {/* Tab 4: AI DJ Gig Crates & Storage */}
+          {/* Tab 5: AI DJ Gig Crates & Storage */}
           <div
             onClick={() => {
               setActiveTab('crates');
               handleFetchGigCrates();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
               activeTab === 'crates'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#10b981]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-emerald-400'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span>🤖</span>
+            <div className="flex items-center gap-2.5">
+              <Layers size={15} className={activeTab === 'crates' ? 'text-emerald-400' : 'text-zinc-400'} />
               <span>AI Gig Crates & Storage</span>
-            </div>
-          </div>
-
-          {/* Tab 5: Smart Mixtape */}
-          <div
-            onClick={() => setActiveTab('mixtape')}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
-              activeTab === 'mixtape'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-              </svg>
-              <span>Smart Mixtape</span>
             </div>
           </div>
 
@@ -3224,14 +3340,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               setActiveTab('mashups');
               handleFetchMashups();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
               activeTab === 'mashups'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#f59e0b]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-amber-400'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span>🔥</span>
+            <div className="flex items-center gap-2.5">
+              <Flame size={15} className={activeTab === 'mashups' ? 'text-amber-400' : 'text-zinc-400'} />
               <span>AI Mashup Matcher</span>
             </div>
           </div>
@@ -3242,14 +3358,14 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
               setActiveTab('activity');
               fetchActivities();
             }}
-            className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition ${
+            className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
               activeTab === 'activity'
-                ? 'bg-[#282828] text-white font-bold border-l-2 border-[#1DB954]'
-                : 'text-[#b3b3b3] hover:text-white hover:bg-[#181818]'
+                ? 'bg-zinc-800/80 text-white font-bold border-l-2 border-emerald-400'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span>⏱️</span>
+            <div className="flex items-center gap-2.5">
+              <History size={15} className={activeTab === 'activity' ? 'text-emerald-400' : 'text-zinc-400'} />
               <span>Activity History</span>
             </div>
           </div>
@@ -3257,37 +3373,34 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           {/* Camelot Wheel */}
           <div
             onClick={() => setShowCamelotModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#b3b3b3] hover:text-white hover:bg-[#181818] cursor-pointer transition"
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.04] cursor-pointer transition group"
           >
-            <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" strokeWidth="2"/>
-              <path strokeLinecap="round" strokeWidth="2" d="M12 3v18M3 12h18"/>
-            </svg>
+            <Compass size={15} className="text-cyan-400 group-hover:rotate-45 transition-transform" />
             <span>Camelot Wheel</span>
           </div>
 
           {/* AI DJ Vibe Curator */}
           <div
             onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#b3b3b3] hover:text-white hover:bg-[#181818] cursor-pointer transition"
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
           >
-            <span>🤖</span>
+            <Wand2 size={15} className="text-purple-400" />
             <span>AI DJ Vibe Curator</span>
           </div>
         </div>
 
         {/* Categories / DJ Crates */}
-        <div className="mt-6 pt-4 border-t border-[#242424]">
-          <div className="flex items-center justify-between px-3 mb-2 text-[10px] font-bold text-[#727272] uppercase tracking-wider">
+        <div className="mt-6 pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
             <span>DJ CRATES & EXPORT</span>
           </div>
-          <div className="space-y-0.5 text-xs text-[#b3b3b3] font-medium">
-            <div onClick={() => handleExportRekordbox()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
-              <span>📦</span>
+          <div className="space-y-0.5 text-xs text-zinc-400 font-medium">
+            <div onClick={() => handleExportRekordbox()} className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.04] hover:text-white cursor-pointer transition">
+              <FileSpreadsheet size={14} className="text-emerald-400" />
               <span>rekordbox XML (1-5★)</span>
             </div>
-            <div onClick={() => handleExportM3U8()} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-white cursor-pointer transition">
-              <span>🎵</span>
+            <div onClick={() => handleExportM3U8()} className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.04] hover:text-white cursor-pointer transition">
+              <FileAudio size={14} className="text-cyan-400" />
               <span>M3U8 Playlist</span>
             </div>
             <div
@@ -3296,9 +3409,9 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 setShowSettingsModal(true);
                 handleFetchSystemHealth();
               }}
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-[#181818] hover:text-[#1DB954] cursor-pointer transition text-white font-semibold"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.04] hover:text-emerald-400 cursor-pointer transition text-zinc-300 font-semibold"
             >
-              <span>⚙️</span>
+              <Settings size={14} className="text-zinc-400" />
               <span>Settings (ตั้งค่าระบบ)</span>
             </div>
           </div>
@@ -3306,9 +3419,9 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
         {/* Boost with AI / Harmonic Card */}
         <div className="mt-auto pt-3">
-          <div className="p-3.5 rounded-2xl bg-[#1b1b20] border border-white/5 space-y-2.5 shadow-lg">
+          <div className="p-3.5 rounded-2xl bg-zinc-900/70 border border-white/5 space-y-2.5 shadow-lg">
             <div className="flex items-center gap-2 text-xs font-bold text-white">
-              <span className="text-indigo-400">✨</span>
+              <Sparkles size={14} className="text-indigo-400" />
               <span>Harmonic AI Studio</span>
             </div>
             <p className="text-[11px] text-zinc-400 leading-relaxed">
@@ -3329,8 +3442,8 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
         {/* Bottom Profile / Storage Card */}
         <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between px-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow">
-              🎧
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 flex items-center justify-center text-xs font-bold text-cyan-300 shadow">
+              <Headphones size={15} />
             </div>
             <div>
               <p className="text-xs font-bold text-white leading-none">DJ Pro User</p>
@@ -3342,13 +3455,15 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
       </aside>
 
       {/* ================= RIGHT MAIN STAGE ================= */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#121212] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-black overflow-hidden">
         
         {/* Main Stage Header */}
-        <div className="px-6 py-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-[#242424] bg-[#121212] shrink-0">
+        <div className="px-6 py-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-white/[0.08] bg-black shrink-0">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-black text-white tracking-tight truncate">
-              {activeTab === 'queue'
+            <h2 className="text-xl font-black text-white tracking-tight truncate flex items-center gap-2">
+              {activeTab === 'mixtape'
+                ? '✨ AI DJ Set Generator (MusicMate Mode)'
+                : activeTab === 'queue'
                 ? 'Spotify & Download Queue'
                 : activeTab === 'yt_extractor'
                 ? 'YouTube DJ Set & Mixtape Extractor'
@@ -3358,12 +3473,12 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 ? 'AI DJ Gig Crates & Smart Storage'
                 : activeTab === 'mashups'
                 ? 'AI DJ Mashup Matcher & Synergy Engine'
-                : activeTab === 'activity'
-                ? 'Activity & History Logs'
-                : 'Smart Mixtape Sequencer'}
+                : 'Activity & History Logs'}
             </h2>
             <p className="text-xs text-[#a7a7a7] mt-0.5 truncate">
-              {activeTab === 'queue'
+              {activeTab === 'mixtape'
+                ? 'พิมพ์ Prompt บรรยายอารมณ์เซ็ต AI จะคำนวณความยาว จัดเรียง Camelot Key และ Energy Flow ให้อัตโนมัติ (MusicMate)'
+                : activeTab === 'queue'
                 ? 'Convert Spotify tracks/playlists to 320kbps Lossless, analyze Key/BPM & auto-tag for DJing'
                 : activeTab === 'yt_extractor'
                 ? 'Extract individual tracklists from YouTube DJ Live Sets, Boiler Rooms, and Mixtapes'
@@ -3373,9 +3488,7 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
                 ? 'Auto-classify and structure library into professional Gig Profiles & Rekordbox Storage folders'
                 : activeTab === 'mashups'
                 ? 'Discovers 100% harmonic compatible pairs, layers vocal hooks on heavy drops, and calculates tempo sync'
-                : activeTab === 'activity'
-                ? 'Real-time audit log of downloads, Studio Master upgrades, duplicate cleanups, and export events'
-                : 'Automatically sequence tracks using harmonic key transitions and energy curve'}
+                : 'Real-time audit log of downloads, Studio Master upgrades, duplicate cleanups, and export events'}
             </p>
           </div>
 
@@ -4533,398 +4646,531 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
           {/* ================= VIEW 4: SMART MIXTAPE (AI DJ ENGINE) ================= */}
           {activeTab === 'mixtape' && (
-            <div className="flex-1 flex flex-col min-h-0 bg-[#141417] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
+            <div className="flex-1 flex flex-col min-h-0 bg-black rounded-3xl border border-white/[0.08] overflow-hidden shadow-2xl">
               
-              {/* Sleek Compact Pro DJ Deck (Ultra-clean & Maximizes Tracklist Space) */}
-              <div className="bg-[#141417] border-b border-white/5 flex flex-col shrink-0">
-                {/* Row 1: Unified Compact Action Bar */}
-                <div className="px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-                  {/* Left: Source, Style, Genre, Count */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1 bg-[#0e0e11] p-0.5 rounded-lg border border-white/5 text-[11px] font-bold">
-                      <button
-                        onClick={() => {
-                          setMixtapeSource('library');
-                          handleBuildMixtape({ source: 'library' });
-                        }}
-                        className={`px-2.5 py-1 rounded-md transition ${
-                          mixtapeSource === 'library' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        📚 Library ({libraryTracks.length})
-                      </button>
-                      <button
-                        onClick={() => {
-                          setMixtapeSource('queue');
-                          handleBuildMixtape({ source: 'queue' });
-                        }}
-                        className={`px-2.5 py-1 rounded-md transition ${
-                          mixtapeSource === 'queue' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        📥 Queue ({tracks.length})
-                      </button>
-                    </div>
-
-                    {/* Style Select */}
-                    <select
-                      value={mixtapeMode}
-                      onChange={(e) => {
-                        const newMode = e.target.value as any;
-                        setMixtapeMode(newMode);
-                        handleBuildMixtape({ mode: newMode });
-                      }}
-                      className="bg-[#0e0e11] text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-white/10 focus:outline-none cursor-pointer"
-                      title="Mixing Style"
-                    >
-                      <option value="peak_climb">🚀 Peak-Time (1★➔5★)</option>
-                      <option value="harmonic_flow">🎡 Harmonic Flow</option>
-                      <option value="bpm_ramp">📈 BPM Ramp</option>
-                      <option value="sunset_lounge">🌅 Sunset Lounge</option>
-                    </select>
-
-                    {/* Genre Select */}
-                    <select
-                      value={mixtapeGenre}
-                      onChange={(e) => {
-                        const newGenre = e.target.value;
-                        setMixtapeGenre(newGenre);
-                        handleBuildMixtape({ genre: newGenre });
-                      }}
-                      className="bg-[#0e0e11] text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-white/10 focus:outline-none max-w-[160px] cursor-pointer"
-                      title="Filter Genre"
-                    >
-                      <option value="ALL">All Genres (ทุกแนว)</option>
-                      <option value="Thai All">🇹🇭 เพลงไทยทั้งหมด (Thai All)</option>
-                      <option value="Thai Hip-Hop">🇹🇭 ไทยฮิปฮอป / แร็ป (Thai Hip-Hop)</option>
-                      <option value="Thai Pop">🇹🇭 ไทยป๊อป / อินดี้ (Thai Pop & Indie)</option>
-                      <option value="Thai Rock">🇹🇭 ไทยร็อค / ผับ (Thai Rock & Pub)</option>
-                      <option value="Dance">🎧 Dance / Electronic / Club</option>
-                      <option value="Hip-Hop">🎤 Global Hip-Hop / Rap</option>
-                      <option value="Pop">✨ Pop / Dance-Pop</option>
-                      <option value="Rock">🎸 Rock / Alternative</option>
-                      <option value="Latin">🌴 Latin / Reggaeton</option>
-                      <option value="Trap">⚡ Trap / Bass</option>
-                      <option value="R&B">🎷 R&B / Soul</option>
-                      <option value="K-Pop">🌸 K-Pop</option>
-                      <option value="Drum & Bass">🥁 Drum & Bass</option>
-                    </select>
-
-                    {/* BPM Filter */}
-                    <select
-                      value={mixtapeBpmRange}
-                      onChange={(e) => {
-                        const newBpm = e.target.value;
-                        setMixtapeBpmRange(newBpm);
-                        handleBuildMixtape({ bpm: newBpm });
-                      }}
-                      className="bg-[#0e0e11] text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-white/10 focus:outline-none cursor-pointer"
-                      title="BPM Filter"
-                    >
-                      <option value="ALL">All BPM</option>
-                      <option value="70-95">70 - 95 BPM</option>
-                      <option value="95-115">95 - 115 BPM</option>
-                      <option value="115-128">115 - 128 BPM</option>
-                      <option value="128-138">128 - 138 BPM</option>
-                      <option value="140-175">140 - 175 BPM</option>
-                    </select>
-
-                    {/* Track Count Select */}
-                    <select
-                      value={mixtapeCount}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setMixtapeCount(val);
-                        handleBuildMixtape({ count: val });
-                      }}
-                      className="bg-[#0e0e11] text-indigo-400 font-bold text-xs px-2.5 py-1.5 rounded-lg border border-white/10 focus:outline-none cursor-pointer"
-                      title="Number of Tracks"
-                    >
-                      <option value={10}>10 Tracks</option>
-                      <option value={15}>15 Tracks</option>
-                      <option value={20}>20 Tracks</option>
-                      <option value={30}>30 Tracks</option>
-                      <option value={0}>All Tracks</option>
-                    </select>
+              {/* MusicMate AI Hero Prompt Bar Section */}
+              <div className="px-6 pt-6 pb-5 bg-black border-b border-white/[0.08] shrink-0">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <span>MusicMate</span>
+                      <span className="text-xs font-normal text-zinc-400">AI DJ Set Generator</span>
+                    </h2>
                   </div>
-
-                  {/* Right Action Buttons */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      disabled={isBuildingMixtape}
-                      onClick={() => handleBuildMixtape()}
-                      className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 active:scale-95 text-white font-bold text-xs shadow transition flex items-center gap-1.5"
-                      title="Generate AI Mixtape"
-                    >
-                      {isBuildingMixtape ? <span className="animate-spin text-xs">↻</span> : <span>⚡</span>}
-                      <span>Generate</span>
-                    </button>
-
-                    <button
-                      disabled={isBuildingMixtape}
-                      onClick={() => handleBuildMixtape()}
-                      className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-black font-bold text-xs shadow transition flex items-center gap-1"
-                      title="Reshuffle Random Set"
-                    >
-                      <span>🎲 Random</span>
-                    </button>
-
-                    {mixtapeTracks.length > 0 && (
-                      <>
-                        <button
-                          onClick={() => handleAddAllMixtapeToQueue(true)}
-                          className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow transition flex items-center gap-1.5 active:scale-95"
-                          title="เริ่มเล่นเพลงแรกของ Mixtape Set ทันทีและเพิ่มเพลงที่เหลือลงคิว"
-                        >
-                          <span>▶ เล่นทั้ง Mixtape</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleAddAllMixtapeToQueue(false)}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white font-bold text-xs border border-indigo-500/40 transition flex items-center gap-1.5 active:scale-95 shadow"
-                          title="เพิ่มเพลงทั้งหมดใน Smart Mixtape Set นี้ลงในคิวเล่นต่อ (Up Next Queue)"
-                        >
-                          <span>📑</span>
-                          <span>+ ลงคิวทั้ง Set ({mixtapeTracks.length})</span>
-                        </button>
-
-                        <button
-                          onClick={handleToggleContinuousMix}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow transition flex items-center gap-1 ${
-                            isAuditioningMix ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white animate-pulse' : 'bg-[#202026] hover:bg-[#282830] text-cyan-400 border border-white/10'
-                          }`}
-                          title="Audition live outro-to-intro crossfades"
-                        >
-                          <span>{isAuditioningMix ? '⏸ Pause Mix' : '▶ Play Mix'}</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleOpenYoutubeExport(mixtapeTracks, mixtapeTitle.trim() || 'Smart_Mixtape_DJ_Set')}
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-95 text-white font-bold text-xs shadow transition flex items-center gap-1"
-                          title="Export tracklist with YouTube timestamps / chapters"
-                        >
-                          <span>📋 YouTube TXT</span>
-                        </button>
-
-                        <button
-                          disabled={isExportingPackage}
-                          onClick={() => setShowExportSetModal(true)}
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs shadow transition flex items-center gap-1 disabled:opacity-40"
-                          title="Export Rekordbox, Serato, Traktor, VDJ Package"
-                        >
-                          {isExportingPackage ? <span className="animate-spin text-xs">↻</span> : <span>🎛️</span>}
-                          <span>Export Set</span>
-                        </button>
-
-                        <button
-                          onClick={handleClearMixtape}
-                          className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/20 transition active:scale-95"
-                          title="Clear Set"
-                        >
-                          ✕
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Row 2: Slim Summary Bar (Only 26px high) */}
-                {mixtapeTracks.length > 1 && (() => {
-                  let totalScore = 0;
-                  let totalDur = 0;
-                  let totalBpm = 0;
-                  let bpmCount = 0;
-                  let warmupCount = 0;
-                  let buildCount = 0;
-                  let peakCount = 0;
-
-                  for (let i = 0; i < mixtapeTracks.length; i++) {
-                    const t = mixtapeTracks[i];
-                    totalDur += (t.duration_ms || 180000) / 1000;
-                    if (t.bpm) {
-                      totalBpm += Number(t.bpm);
-                      bpmCount++;
-                    }
-                    const stars = Number(t.stars || 3);
-                    if (stars <= 2) warmupCount++;
-                    else if (stars === 3) buildCount++;
-                    else peakCount++;
-
-                    if (i > 0) {
-                      totalScore += getHarmonicTransition(mixtapeTracks[i - 1], t).score;
-                    }
-                  }
-
-                  const avgScore = Math.round(totalScore / (mixtapeTracks.length - 1));
-                  const avgBpm = bpmCount > 0 ? Math.round(totalBpm / bpmCount) : 124;
-                  const durMin = Math.floor(totalDur / 60);
-
-                  return (
-                    <div className="px-5 py-1.5 bg-[#0e0e11] border-t border-white/5 flex items-center justify-between text-[11px] font-semibold text-zinc-400">
-                      <div className="flex items-center gap-3">
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
-                          🎧 Mix Score: {avgScore}% ({avgScore >= 95 ? 'Grade A+' : 'Grade A'})
-                        </span>
-                        <span>•</span>
-                        <span>⏱️ {durMin} mins ({mixtapeTracks.length} tracks)</span>
-                        <span>•</span>
-                        <span>⚡ Avg {avgBpm} BPM</span>
-                      </div>
-
-                      <div className="flex items-center gap-2 font-bold text-[10px]">
-                        <span className="text-sky-400">🌅 Warm-Up ({warmupCount})</span>
-                        <span className="text-amber-400">⚡ Build-Up ({buildCount})</span>
-                        <span className="text-rose-400">🔥 Peak Drops ({peakCount})</span>
-                      </div>
+                  {mixtapeTracks.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-white/90 bg-white/[0.06] px-3 py-1 rounded-full border border-white/10">
+                        {mixtapeTitle}
+                      </span>
                     </div>
-                  );
-                })()}
-              </div>
-
-              {/* Table */}
-              <div className="flex-1 overflow-y-auto px-6 py-2 pb-32">
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-white/5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider items-center">
-                  <div className="col-span-1 text-center font-mono font-bold text-indigo-400">#</div>
-                  <div className="col-span-4">Track Title</div>
-                  <div className="col-span-2">Genre / Style</div>
-                  <div className="col-span-1 text-center font-mono">Key</div>
-                  <div className="col-span-1 text-center font-mono">BPM</div>
-                  <div className="col-span-1 text-center">Energy</div>
-                  <div className="col-span-2 text-right">Order & Actions</div>
-                </div>
-
-                <div className="py-2 space-y-2">
-                  {mixtapeTracks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-28 text-zinc-600">
-                      <span className="text-4xl mb-3">🎧</span>
-                      <p className="font-bold text-zinc-400 text-sm">No DJ Mixtape generated yet</p>
-                      <p className="text-xs text-zinc-600 mt-1">Select Library ({libraryTracks.length}) above and click ⚡ Generate or 🎲 Random to auto-sequence your DJ set</p>
-                      <button
-                        onClick={handleBuildMixtape}
-                        className="mt-4 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg transition"
-                      >
-                        ⚡ Generate Smart DJ Set
-                      </button>
-                    </div>
-                  ) : (
-                    <AnimatePresence>
-                      {mixtapeTracks.map((t, idx) => {
-                        const transition = idx > 0 ? getHarmonicTransition(mixtapeTracks[idx - 1], t) : null;
-
-                        return (
-                          <React.Fragment key={t.id || t.filepath || idx}>
-                            {/* Harmonic Transition Connection Line between tracks */}
-                            {transition && (
-                              <div className="flex items-center gap-2.5 px-6 py-1 my-0.5">
-                                <div className="h-4 w-0.5 bg-indigo-500/40 ml-3 rounded-full"></div>
-                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${transition.color}`}>
-                                  {transition.label}
-                                </span>
-                              </div>
-                            )}
-
-                            <motion.div
-                              layout
-                              initial={{ opacity: 0, y: 5 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0 }}
-                              onContextMenu={(e) => handleOpenContextMenu(e, t, 'mixtape', idx, mixtapeTracks)}
-                              className={`grid grid-cols-12 gap-4 items-center px-4 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent hover:border-white/5 transition ${
-                                isSameTrack(activeTrack, t) ? 'bg-indigo-500/10 border-indigo-500/30 shadow' : ''
-                              }`}
-                            >
-                              <div className="col-span-1 text-center text-xs font-mono text-zinc-400 font-bold flex items-center justify-center gap-2">
-                                <span className="w-5 text-right font-bold text-indigo-400">#{idx + 1}</span>
-                                <button onClick={() => playTrack(t, mixtapeTracks, false)} className="text-zinc-400 hover:text-indigo-400 transition p-0.5">
-                                  {activeTrack && isSameTrack(activeTrack, t) && isPlaying ? '⏸' : '▶'}
-                                </button>
-                              </div>
-
-                              <div className="col-span-4 flex items-center gap-3.5 min-w-0">
-                                <div className="w-10 h-10 rounded-xl bg-[#202026] flex-shrink-0 overflow-hidden shadow border border-white/5">
-                                  {t.cover_url ? (
-                                    <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">🎵</div>
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-white truncate leading-snug">{t.title}</p>
-                                  <p className="text-xs text-zinc-400 font-medium truncate mt-0.5">{t.artist || 'Unknown Artist'}</p>
-                                </div>
-                              </div>
-
-                              <div className="col-span-2 flex flex-col justify-center min-w-0">
-                                <span className="inline-flex items-center w-fit px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold truncate">
-                                  {t.genre || 'General'}
-                                </span>
-                                <span className="text-[11px] text-zinc-400 font-medium truncate mt-0.5">{t.artist || 'Unknown Artist'}</span>
-                              </div>
-
-                              <div className="col-span-1 text-center flex justify-center">
-                                <CamelotBadge
-                                  camelotKey={t.camelot}
-                                  keyName={t.key_name}
-                                  currentPlayingKey={activeTrack?.camelot}
-                                  onClick={() => {
-                                    setSelectedKeyForWheel(t.camelot || '8A');
-                                    setShowCamelotModal(true);
-                                  }}
-                                />
-                              </div>
-
-                              <div className="col-span-1 text-center">
-                                <span className="text-xs font-mono font-semibold text-zinc-300">{t.bpm ? Math.round(t.bpm) : '—'}</span>
-                              </div>
-
-                              <div className="col-span-1 flex justify-center">{renderStars(t.stars || 3)}</div>
-
-                              <div className="col-span-2 flex items-center justify-end gap-1.5 text-xs">
-                                <button
-                                  onClick={() => handleAddToQueue(t)}
-                                  className="px-2 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold text-[10px] border border-indigo-500/20 transition flex items-center gap-0.5 shadow active:scale-95"
-                                  title="Add this track to Up Next Queue"
-                                >
-                                  ＋ Queue
-                                </button>
-                                <button
-                                  disabled={idx === 0}
-                                  onClick={() => handleMoveMixtapeTrack(idx, 'up')}
-                                  className="p-1.5 rounded-lg bg-[#202026] hover:bg-[#282830] text-zinc-400 hover:text-white disabled:opacity-30 transition"
-                                  title="Move Up"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  disabled={idx === mixtapeTracks.length - 1}
-                                  onClick={() => handleMoveMixtapeTrack(idx, 'down')}
-                                  className="p-1.5 rounded-lg bg-[#202026] hover:bg-[#282830] text-zinc-400 hover:text-white disabled:opacity-30 transition"
-                                  title="Move Down"
-                                >
-                                  ▼
-                                </button>
-                                <button
-                                  onClick={() => setEditingTrack({ ...t, index: idx, source: 'mixtape' })}
-                                  className="text-zinc-500 hover:text-white p-1"
-                                  title="Edit Tags"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => handleRemoveMixtapeTrack(idx)}
-                                  className="text-zinc-600 hover:text-rose-400 p-1"
-                                  title="Remove from Set"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </motion.div>
-                          </React.Fragment>
-                        );
-                      })}
-                    </AnimatePresence>
                   )}
                 </div>
+
+                {/* Hero Bar */}
+                <MusicMateHeroBar
+                  onGenerate={handleGenerateMusicMateSet}
+                  isGenerating={isGeneratingMusicMate}
+                />
+              </div>
+
+              {/* Set Energy Curve & Visualization (Shows when in AI set mode with tracks) */}
+              {mixtapeViewMode === 'set' && mixtapeTracks.length > 1 && (
+                <div className="px-6 pt-4 shrink-0 bg-black">
+                  <MusicMateEnergyCurve
+                    tracks={mixtapeTracks}
+                    selectedTrackIndex={selectedCurveTrackIndex}
+                    onSelectTrack={(idx) => {
+                      setSelectedCurveTrackIndex(idx);
+                      playTrack(mixtapeTracks[idx], mixtapeTracks, false);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Mode Switcher & Quick Search: AI Set vs Your Full Library */}
+              <div className="flex items-center justify-between px-6 py-2.5 bg-black border-b border-white/[0.08] flex-wrap gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 bg-white/[0.04] p-1 rounded-full border border-white/10 text-xs">
+                  <button
+                    onClick={() => setMixtapeViewMode('set')}
+                    className={`px-3.5 py-1 rounded-full transition font-semibold flex items-center gap-1.5 ${
+                      mixtapeViewMode === 'set' && mixtapeTracks.length > 0
+                        ? 'bg-white text-black font-bold shadow'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <span>⚡ AI Curated Set</span>
+                    {mixtapeTracks.length > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${mixtapeViewMode === 'set' ? 'bg-black text-white' : 'bg-white/10 text-zinc-300'}`}>
+                        {mixtapeTracks.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setMixtapeViewMode('library')}
+                    className={`px-3.5 py-1 rounded-full transition font-semibold flex items-center gap-1.5 ${
+                      mixtapeViewMode === 'library' || mixtapeTracks.length === 0
+                        ? 'bg-white text-black font-bold shadow'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <span>📚 คลังเพลงของคุณ (Library)</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${mixtapeViewMode === 'library' || mixtapeTracks.length === 0 ? 'bg-black text-white' : 'bg-white/10 text-zinc-300'}`}>
+                      {libraryTracks.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Quick Search in tracklist */}
+                <div className="relative flex items-center min-w-[200px] max-w-[280px]">
+                  <input
+                    type="text"
+                    value={libSearch}
+                    onChange={(e) => setLibSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อเพลง, ศิลปิน, Key, BPM..."
+                    className="w-full bg-white/[0.04] text-white text-xs pl-8 pr-7 py-1.5 rounded-full border border-white/10 focus:outline-none focus:border-white/30 placeholder-zinc-500"
+                  />
+                  <span className="absolute left-2.5 text-zinc-500 text-xs">🔍</span>
+                  {libSearch && (
+                    <button onClick={() => setLibSearch('')} className="absolute right-2.5 text-zinc-500 hover:text-white text-xs">✕</button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {mixtapeTracks.length > 0 && mixtapeViewMode === 'set' ? (
+                    <>
+                      <button
+                        onClick={() => handleAddAllMixtapeToQueue(true)}
+                        className="px-3.5 py-1 rounded-full bg-white text-black font-bold text-xs hover:bg-zinc-200 transition active:scale-95 shadow"
+                      >
+                        ▶ Play Set
+                      </button>
+                      <button
+                        onClick={() => setShowExportSetModal(true)}
+                        className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-white font-medium text-xs border border-white/15 transition active:scale-95"
+                      >
+                        🎛️ Export Rekordbox
+                      </button>
+                      <button
+                        onClick={() => handleOpenYoutubeExport(mixtapeTracks, mixtapeTitle.trim() || 'Smart_Mixtape_DJ_Set')}
+                        className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-white font-medium text-xs border border-white/15 transition active:scale-95"
+                      >
+                        📋 YouTube TXT
+                      </button>
+                      <button
+                        onClick={handleClearMixtape}
+                        className="p-1 rounded-full text-zinc-500 hover:text-rose-400 hover:bg-white/[0.06] transition"
+                        title="Clear Set"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleAddAllLibraryToMixtape}
+                        className="px-3.5 py-1 rounded-full bg-white text-black font-bold text-xs hover:bg-zinc-200 transition active:scale-95 shadow"
+                      >
+                        ⚡ จัดเซ็ตจากเพลงทั้งหมด ({libraryTracks.length})
+                      </button>
+                      <button
+                        onClick={handleBrowseDir}
+                        className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-zinc-300 font-medium text-xs border border-white/15 transition active:scale-95"
+                        title="เลือกโฟลเดอร์เพลงในเครื่อง"
+                      >
+                        📁 เลือกโฟลเดอร์
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Minimalist Monochrome DJ Deck Controls & Filter Bar */}
+              <div className="bg-black border-b border-white/[0.08] px-6 py-2 flex items-center justify-between gap-3 flex-wrap shrink-0">
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {/* Source Toggle */}
+                  <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-full border border-white/10 text-[11px] font-semibold">
+                    <button
+                      onClick={() => {
+                        setMixtapeSource('library');
+                        handleBuildMixtape({ source: 'library' });
+                      }}
+                      className={`px-3 py-1 rounded-full transition ${
+                        mixtapeSource === 'library' ? 'bg-white text-black font-bold shadow' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Library ({libraryTracks.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMixtapeSource('queue');
+                        handleBuildMixtape({ source: 'queue' });
+                      }}
+                      className={`px-3 py-1 rounded-full transition ${
+                        mixtapeSource === 'queue' ? 'bg-white text-black font-bold shadow' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Queue ({tracks.length})
+                    </button>
+                  </div>
+
+                  {/* Flow Style */}
+                  <select
+                    value={mixtapeMode}
+                    onChange={(e) => {
+                      const newMode = e.target.value as any;
+                      setMixtapeMode(newMode);
+                      handleBuildMixtape({ mode: newMode });
+                    }}
+                    className="bg-white/[0.04] text-white text-xs font-medium px-3 py-1 rounded-full border border-white/10 focus:outline-none cursor-pointer"
+                  >
+                    <option value="peak_climb" className="bg-[#121216] text-white">🚀 Peak-Time (1★➔5★)</option>
+                    <option value="harmonic_flow" className="bg-[#121216] text-white">🎡 Harmonic Flow</option>
+                    <option value="bpm_ramp" className="bg-[#121216] text-white">📈 BPM Ramp</option>
+                    <option value="sunset_lounge" className="bg-[#121216] text-white">🌅 Sunset Lounge</option>
+                  </select>
+
+                  {/* Genre Filter */}
+                  <select
+                    value={mixtapeGenre}
+                    onChange={(e) => {
+                      const newGenre = e.target.value;
+                      setMixtapeGenre(newGenre);
+                      handleBuildMixtape({ genre: newGenre });
+                    }}
+                    className="bg-white/[0.04] text-white text-xs font-medium px-3 py-1 rounded-full border border-white/10 focus:outline-none cursor-pointer max-w-[150px]"
+                  >
+                    <option value="ALL" className="bg-[#121216] text-white">All Genres</option>
+                    <option value="Thai All" className="bg-[#121216] text-white">🇹🇭 Thai All</option>
+                    <option value="Thai Hip-Hop" className="bg-[#121216] text-white">🇹🇭 Thai Hip-Hop</option>
+                    <option value="Thai Pop" className="bg-[#121216] text-white">🇹🇭 Thai Pop</option>
+                    <option value="Dance" className="bg-[#121216] text-white">🎧 Dance / EDM</option>
+                    <option value="Hip-Hop" className="bg-[#121216] text-white">🎤 Hip-Hop</option>
+                    <option value="Pop" className="bg-[#121216] text-white">✨ Pop</option>
+                    <option value="House" className="bg-[#121216] text-white">🏠 House</option>
+                  </select>
+
+                  {/* Count Select */}
+                  <select
+                    value={mixtapeCount}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setMixtapeCount(val);
+                      handleBuildMixtape({ count: val });
+                    }}
+                    className="bg-white/[0.04] text-white text-xs font-mono font-medium px-3 py-1 rounded-full border border-white/10 focus:outline-none cursor-pointer"
+                  >
+                    <option value={10} className="bg-[#121216] text-white">10 Tracks</option>
+                    <option value={15} className="bg-[#121216] text-white">15 Tracks</option>
+                    <option value={20} className="bg-[#121216] text-white">20 Tracks</option>
+                    <option value={30} className="bg-[#121216] text-white">30 Tracks</option>
+                    <option value={0} className="bg-[#121216] text-white">All Tracks</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={isBuildingMixtape}
+                    onClick={() => handleBuildMixtape()}
+                    className="px-3.5 py-1 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 font-bold text-xs shadow transition flex items-center gap-1.5"
+                  >
+                    {isBuildingMixtape ? <span className="animate-spin text-xs">↻</span> : <span>⚡</span>}
+                    <span>Auto Sequence</span>
+                  </button>
+                  <button
+                    disabled={isBuildingMixtape}
+                    onClick={() => handleBuildMixtape()}
+                    className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-white font-medium text-xs border border-white/10 transition flex items-center gap-1 active:scale-95"
+                  >
+                    <span>🎲 Reshuffle</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Set Summary Bar (Shows when viewing Set with multiple tracks) */}
+              {mixtapeTracks.length > 1 && mixtapeViewMode === 'set' && (() => {
+                let totalScore = 0;
+                let totalDur = 0;
+                let totalBpm = 0;
+                let bpmCount = 0;
+                let warmupCount = 0;
+                let buildCount = 0;
+                let peakCount = 0;
+
+                for (let i = 0; i < mixtapeTracks.length; i++) {
+                  const t = mixtapeTracks[i];
+                  totalDur += (t.duration_ms || 180000) / 1000;
+                  if (t.bpm) {
+                    totalBpm += Number(t.bpm);
+                    bpmCount++;
+                  }
+                  const stars = Number(t.stars || 3);
+                  if (stars <= 2) warmupCount++;
+                  else if (stars === 3) buildCount++;
+                  else peakCount++;
+
+                  if (i > 0) {
+                    totalScore += getHarmonicTransition(mixtapeTracks[i - 1], t).score;
+                  }
+                }
+
+                const avgScore = Math.round(totalScore / (mixtapeTracks.length - 1));
+                const avgBpm = bpmCount > 0 ? Math.round(totalBpm / bpmCount) : 124;
+                const durMin = Math.floor(totalDur / 60);
+
+                return (
+                  <div className="px-6 py-1.5 bg-black border-b border-white/[0.08] flex items-center justify-between text-[11px] font-semibold text-zinc-400 shrink-0">
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-bold flex items-center gap-1">
+                        🎧 Harmonic Match: {avgScore}% ({avgScore >= 95 ? 'Grade A+' : 'Grade A'})
+                      </span>
+                      <span>•</span>
+                      <span>⏱️ {durMin} mins ({mixtapeTracks.length} tracks)</span>
+                      <span>•</span>
+                      <span>⚡ Avg {avgBpm} BPM</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 font-mono text-[10px]">
+                      <span className="text-zinc-400">🌅 Warm-Up: {warmupCount}</span>
+                      <span>•</span>
+                      <span className="text-zinc-300">⚡ Build-Up: {buildCount}</span>
+                      <span>•</span>
+                      <span className="text-white font-bold">🔥 Peak: {peakCount}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Table / Tracklist Stage */}
+              <div className="flex-1 overflow-y-auto px-6 py-3 pb-32">
+                {(() => {
+                  const isViewingSet = mixtapeViewMode === 'set' && mixtapeTracks.length > 0;
+                  const displayTracks = isViewingSet
+                    ? mixtapeTracks
+                    : (filteredLibrary.length > 0 || libSearch.trim() || libFilterGenre !== 'ALL' || libFilterKey !== 'ALL')
+                    ? filteredLibrary
+                    : libraryTracks;
+
+                  return (
+                    <>
+                      {/* Table Column Headers */}
+                      <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-white/[0.08] text-[11px] font-medium text-zinc-500 uppercase tracking-wider items-center">
+                        <div className="col-span-1 text-center font-mono">#</div>
+                        <div className="col-span-4">Track Title & Artist</div>
+                        <div className="col-span-2">Genre</div>
+                        <div className="col-span-1 text-center font-mono">Key</div>
+                        <div className="col-span-1 text-center font-mono">BPM</div>
+                        <div className="col-span-1 text-center">Energy</div>
+                        <div className="col-span-2 text-right">Actions</div>
+                      </div>
+
+                      <div className="py-2 space-y-1.5">
+                        {displayTracks.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-24 text-zinc-500 text-center">
+                            <span className="text-4xl mb-3">🎵</span>
+                            <p className="font-semibold text-white text-sm">
+                              {isViewingSet ? 'ยังไม่มี AI DJ Set ที่สร้างไว้' : 'ยังไม่มีเพลงในคลังเพลง (Library)'}
+                            </p>
+                            <p className="text-xs text-zinc-400 mt-1 max-w-md">
+                              {isViewingSet
+                                ? 'พิมพ์ Prompt คำสั่งด้านบน หรือคลิก "📚 คลังเพลงของคุณ (Library)" เพื่อเลือกเพลงมาจัดเซ็ต'
+                                : 'เลือกโฟลเดอร์เพลงในเครื่อง หรือดาวน์โหลดเพลงผ่าน Spotify/YouTube ลิงก์'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-4">
+                              {isViewingSet ? (
+                                <button
+                                  onClick={() => setMixtapeViewMode('library')}
+                                  className="px-4 py-2 rounded-full bg-white text-black font-semibold text-xs shadow hover:bg-zinc-200 transition"
+                                >
+                                  📚 ดูคลังเพลงของคุณ ({libraryTracks.length} เพลง)
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={handleBrowseDir}
+                                    className="px-4 py-2 rounded-full bg-white text-black font-semibold text-xs shadow hover:bg-zinc-200 transition"
+                                  >
+                                    📁 เลือกโฟลเดอร์เพลง
+                                  </button>
+                                  <button
+                                    onClick={handleRescanFolder}
+                                    className="px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs border border-white/10 transition"
+                                  >
+                                    🔄 สแกนใหม่
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <AnimatePresence>
+                            {displayTracks.map((t, idx) => {
+                              const transition = isViewingSet && idx > 0 ? getHarmonicTransition(mixtapeTracks[idx - 1], t) : null;
+                              const isCurrentPlaying = activeTrack && isSameTrack(activeTrack, t);
+
+                              return (
+                                <React.Fragment key={t.id || t.filepath || idx}>
+                                  {/* Harmonic Transition Connection Line between set tracks */}
+                                  {transition && (
+                                    <div className="flex items-center gap-2.5 px-6 py-1 my-0.5">
+                                      <div className="h-4 w-0.5 bg-white/20 ml-3 rounded-full"></div>
+                                      <span className="text-[10px] font-mono font-medium px-2.5 py-0.5 rounded-full bg-white/[0.06] text-white/90 border border-white/10">
+                                        {transition.label}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <motion.div
+                                    layout
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
+                                    onContextMenu={(e) => handleOpenContextMenu(e, t, isViewingSet ? 'mixtape' : 'library', idx, displayTracks)}
+                                    className={`grid grid-cols-12 gap-4 items-center px-4 py-2 rounded-xl transition ${
+                                      isCurrentPlaying
+                                        ? 'bg-white/[0.08] border border-white/20 shadow-sm'
+                                        : 'bg-[#09090c] hover:bg-white/[0.04] border border-white/[0.06]'
+                                    }`}
+                                  >
+                                    {/* Column 1: Index & Play Preview */}
+                                    <div className="col-span-1 text-center text-xs font-mono text-zinc-400 font-medium flex items-center justify-center gap-2">
+                                      <span className="w-5 text-right font-mono text-zinc-500">#{idx + 1}</span>
+                                      <button
+                                        onClick={() => playTrack(t, displayTracks, false)}
+                                        className="text-zinc-400 hover:text-white transition p-0.5"
+                                        title={isCurrentPlaying && isPlaying ? 'Pause' : 'Play Preview'}
+                                      >
+                                        {isCurrentPlaying && isPlaying ? (
+                                        <span className="flex items-end gap-[2px] h-3 w-3 px-0.5 justify-center">
+                                          <span className="w-[2px] bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite] h-2.5" />
+                                          <span className="w-[2px] bg-white rounded-full animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-3.5" />
+                                          <span className="w-[2px] bg-white rounded-full animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-2" />
+                                        </span>
+                                      ) : '▶'}
+                                      </button>
+                                    </div>
+
+                                    {/* Column 2: Cover, Title & Artist */}
+                                    <div className="col-span-4 flex items-center gap-3 min-w-0">
+                                      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                                        {t.cover_url ? (
+                                          <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <span className="text-xs text-zinc-500">🎵</span>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-semibold text-white truncate leading-snug">{t.title}</p>
+                                        <p className="text-[11px] text-zinc-400 truncate mt-0.5">{t.artist || 'Unknown Artist'}</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Column 3: Genre */}
+                                    <div className="col-span-2 flex items-center min-w-0">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10 text-[10px] font-medium truncate">
+                                        {t.genre || 'General'}
+                                      </span>
+                                    </div>
+
+                                    {/* Column 4: Key */}
+                                    <div className="col-span-1 text-center flex justify-center">
+                                      <CamelotBadge
+                                        camelotKey={t.camelot}
+                                        keyName={t.key_name}
+                                        currentPlayingKey={activeTrack?.camelot}
+                                        onClick={() => {
+                                          setSelectedKeyForWheel(t.camelot || '8A');
+                                          setShowCamelotModal(true);
+                                        }}
+                                      />
+                                    </div>
+
+                                    {/* Column 5: BPM */}
+                                    <div className="col-span-1 text-center">
+                                      <span className="text-xs font-mono font-medium text-zinc-300">{t.bpm ? Math.round(t.bpm) : '—'}</span>
+                                    </div>
+
+                                    {/* Column 6: Energy Stars */}
+                                    <div className="col-span-1 flex justify-center">{renderStars(t.stars || 3)}</div>
+
+                                    {/* Column 7: Actions */}
+                                    <div className="col-span-2 flex items-center justify-end gap-1.5 text-xs">
+                                      {isViewingSet ? (
+                                        <>
+                                          <button
+                                            onClick={() => handleAddToQueue(t)}
+                                            className="px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white font-medium text-[10px] border border-white/10 transition active:scale-95"
+                                            title="Add to Up Next Queue"
+                                          >
+                                            ＋ Queue
+                                          </button>
+                                          <button
+                                            disabled={isRerollingTrackIndex === idx}
+                                            onClick={() => handleRerollMixtapeTrack(idx)}
+                                            className="px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white font-medium text-[10px] border border-white/10 transition active:scale-95 disabled:opacity-40"
+                                            title="สลับเพลงนี้ (หาเพลง Harmonic Key เดียวกัน)"
+                                          >
+                                            {isRerollingTrackIndex === idx ? <span className="animate-spin text-xs">↻</span> : <span>🎲 Swap</span>}
+                                          </button>
+                                          <button
+                                            disabled={idx === 0}
+                                            onClick={() => handleMoveMixtapeTrack(idx, 'up')}
+                                            className="p-1 rounded-md bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white disabled:opacity-30 transition text-xs"
+                                            title="Move Up"
+                                          >
+                                            ▲
+                                          </button>
+                                          <button
+                                            disabled={idx === mixtapeTracks.length - 1}
+                                            onClick={() => handleMoveMixtapeTrack(idx, 'down')}
+                                            className="p-1 rounded-md bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white disabled:opacity-30 transition text-xs"
+                                            title="Move Down"
+                                          >
+                                            ▼
+                                          </button>
+                                          <button
+                                            onClick={() => handleRemoveMixtapeTrack(idx)}
+                                            className="text-zinc-500 hover:text-rose-400 p-1 transition"
+                                            title="Remove from Set"
+                                          >
+                                            ✕
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button
+                                            onClick={(e) => handleAddTrackToMixtape(t, e)}
+                                            className="px-2.5 py-1 rounded-md bg-white text-black hover:bg-zinc-200 font-bold text-[10px] transition active:scale-95 shadow"
+                                            title="Add this song to AI DJ Set"
+                                          >
+                                            ⚡ + Set
+                                          </button>
+                                          <button
+                                            onClick={() => handleAddToQueue(t)}
+                                            className="px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white font-medium text-[10px] border border-white/10 transition active:scale-95"
+                                            title="Add this track to Up Next Queue"
+                                          >
+                                            ＋ Queue
+                                          </button>
+                                          <button
+                                            onClick={() => setEditingTrack({ ...t, index: idx, source: 'library' })}
+                                            className="text-zinc-500 hover:text-white p-1 transition text-xs"
+                                            title="Edit Tags"
+                                          >
+                                            ✏️
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                </React.Fragment>
+                              );
+                            })}
+                          </AnimatePresence>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
             </div>
@@ -5629,208 +5875,222 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
 
       </div>
 
-      {/* Audio Preview Dock: Pro Spotify / Rekordbox Responsive Player */}
+      {/* Audio Preview Dock: Beatport Pro Single Horizontal Streaming Player */}
       <footer
         onContextMenu={(e) => handleOpenContextMenu(e, activeTrack, 'player')}
-        className="fixed bottom-0 left-0 right-0 h-20 bg-[#181818] border-t border-[#282828] px-4 sm:px-6 flex items-center justify-between text-white z-50 select-none shadow-2xl"
+        className="fixed bottom-0 left-0 right-0 h-16 bg-[#0c0c0e]/98 backdrop-blur-2xl border-t border-white/[0.08] px-4 flex items-center gap-4 text-white z-50 select-none shadow-[0_-10px_35px_rgba(0,0,0,0.95)]"
       >
-        {/* 1. LEFT SECTION: Cover Art + Title + Artist + Camelot/BPM */}
+        {/* 1. LEFT: Cover Art + Title + Artist + Label */}
         <div
           onClick={() => setShowExpandedPlayer(true)}
-          className="flex items-center gap-3 w-56 sm:w-64 max-w-[30%] shrink-0 min-w-0 cursor-pointer group hover:opacity-90 transition"
+          className="flex items-center gap-3 shrink-0 cursor-pointer group max-w-[210px] sm:max-w-[250px] min-w-0"
           title="Click to open Fullscreen Pro DJ Player"
         >
-          <div className="w-12 h-12 rounded-lg bg-[#242424] overflow-hidden shrink-0 border border-[#333333] relative shadow-md">
+          <div className="w-11 h-11 rounded-sm bg-[#18181c] overflow-hidden shrink-0 border border-white/10 relative shadow-sm">
             <TrackCoverImage
               src={activeTrack?.cover_url}
               className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
             />
             {isPlaying && (
               <div className="absolute inset-0 bg-black/40 flex items-end justify-center gap-0.5 pb-1 px-1 pointer-events-none">
-                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
-                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-5" />
-                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-4" />
-                <span className="w-1 bg-[#1DB954] rounded-t animate-[bounce_0.5s_ease-in-out_infinite_0.15s] h-6" />
+                <span className="w-1 bg-white rounded-t animate-[bounce_0.6s_ease-in-out_infinite] h-3" />
+                <span className="w-1 bg-white rounded-t animate-[bounce_0.4s_ease-in-out_infinite_0.1s] h-5" />
+                <span className="w-1 bg-white rounded-t animate-[bounce_0.7s_ease-in-out_infinite_0.2s] h-4" />
               </div>
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-white truncate group-hover:text-[#1DB954] transition leading-tight">
-              {activeTrack?.title || 'ไม่ได้เปิดเพลง'}
-            </p>
-            <p className="text-[11px] text-[#a7a7a7] truncate mt-0.5 leading-tight">
-              {activeTrack?.artist || 'เลือกเพลงเพื่อเล่น'}
-            </p>
-            {activeTrack && (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9px] font-mono text-[#a7a7a7]">
-                  {activeTrack.bpm ? `${Math.round(activeTrack.bpm)} BPM` : '128 BPM'}
-                </span>
-                <span className="text-zinc-600 text-[9px]">•</span>
-                <CamelotBadge
-                  camelotKey={activeTrack.camelot || '8A'}
-                  keyName={activeTrack.key_name}
-                  showHarmonicTag={false}
-                  onClick={() => {
-                    setSelectedKeyForWheel(activeTrack.camelot || '8A');
-                    setShowCamelotModal(true);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 2. CENTER SECTION: Controls (Top) + Waveform Scrubber (Bottom) */}
-        <div className="flex-1 max-w-xl px-2 sm:px-4 flex flex-col items-center justify-center min-w-0">
-          {/* Top Controls Row */}
-          <div className="flex items-center gap-3 sm:gap-4 mb-1">
-            <button
-              onClick={() => {
-                const next = !isAutoDjEnabled;
-                setIsAutoDjEnabled(next);
-                showToast(next ? '🤖 Auto-DJ Mix Mode Enabled' : 'Auto-DJ Disabled', 'info');
-              }}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition flex items-center gap-1 ${
-                isAutoDjEnabled
-                  ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40'
-                  : 'bg-[#242424] text-[#b3b3b3] border-[#333333] hover:text-white'
-              }`}
-              title="Auto-DJ Mode"
-            >
-              <span>🤖</span>
-              <span className="hidden xs:inline">AUTO DJ</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setIsShuffle(!isShuffle);
-                showToast(!isShuffle ? 'Shuffle On' : 'Shuffle Off', 'info');
-              }}
-              className={`text-xs p-1 transition ${
-                isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'
-              }`}
-              title="Shuffle"
-            >
-              🔀
-            </button>
-
-            <button
-              onClick={handlePlayPrev}
-              className="text-[#b3b3b3] hover:text-white text-xs sm:text-sm p-1 transition active:scale-95"
-              title="Previous Track"
-            >
-              ⏮
-            </button>
-
-            {/* Circular Play / Pause Button */}
-            <button
-              onClick={togglePlay}
-              className="w-8 h-8 rounded-full bg-white hover:bg-[#f0f0f0] hover:scale-105 active:scale-95 text-black font-bold text-sm flex items-center justify-center transition shadow-none"
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? '⏸' : '▶'}
-            </button>
-
-            <button
-              onClick={handlePlayNext}
-              className="text-[#b3b3b3] hover:text-white text-xs sm:text-sm p-1 transition active:scale-95"
-              title="Next Track"
-            >
-              ⏭
-            </button>
-
-            <button
-              onClick={() => {
-                const next = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
-                setRepeatMode(next);
-                showToast(`Repeat: ${next.toUpperCase()}`, 'info');
-              }}
-              className={`text-xs p-1 transition relative ${
-                repeatMode !== 'off' ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'
-              }`}
-              title={`Repeat: ${repeatMode}`}
-            >
-              🔁{repeatMode === 'one' && <span className="text-[7px] font-bold absolute -top-1 -right-1 bg-[#1DB954] text-black rounded-full px-0.5">1</span>}
-            </button>
-          </div>
-
-          {/* Bottom Scrubber & Time */}
-          <div className="w-full flex items-center gap-2">
-            <span className="text-[10px] font-mono text-[#a7a7a7] w-8 text-right shrink-0">
-              {formatTime(currentTime)}
-            </span>
-
-            <div className="flex-1 min-w-0">
-              <BeatportWaveform
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={handleSeek}
-                track={activeTrack}
-              />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition">
+                {activeTrack?.title || 'No Track Playing'}
+              </span>
+              <span className="text-[10px] text-zinc-500 font-normal shrink-0">
+                Original Mix
+              </span>
             </div>
-
-            <span className="text-[10px] font-mono text-[#a7a7a7] w-8 shrink-0">
-              {formatTime(duration)}
-            </span>
+            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+              {activeTrack?.artist || 'Select a track to play'}
+            </p>
+            <p className="text-[9px] text-zinc-600 truncate mt-0.5 uppercase tracking-wider">
+              {activeTrack?.album || activeTrack?.label || activeTrack?.playlist_name || 'DJ MATE MASTER'}
+            </p>
           </div>
         </div>
 
-        {/* 3. RIGHT SECTION: Volume + Queue + Fullscreen */}
-        <div className="w-56 sm:w-64 max-w-[30%] shrink-0 flex items-center justify-end gap-2 sm:gap-2.5 min-w-0">
-          {/* Volume Section */}
+        {/* 2. TECHNICAL DETAILS: Time / BPM / Key */}
+        <div className="flex flex-col justify-center shrink-0 text-left min-w-[70px] leading-tight select-none">
+          <div className="text-xs font-mono font-bold text-white">
+            <span>{formatTime(currentTime)}</span>
+            <span className="text-zinc-500 font-normal text-[10px]"> / {formatTime(duration)}</span>
+          </div>
+          <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+            {activeTrack?.bpm ? `${Math.round(activeTrack.bpm)} bpm` : '128 bpm'}
+          </div>
           <div
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#242424] rounded-full border border-[#333333]"
-            onWheel={(e) => {
-              e.preventDefault();
-              changeVolumeStep(e.deltaY < 0 ? 0.05 : -0.05);
+            onClick={() => {
+              setSelectedKeyForWheel(activeTrack?.camelot || '8A');
+              setShowCamelotModal(true);
             }}
+            className="text-[10px] text-zinc-400 font-semibold cursor-pointer hover:text-cyan-400 transition"
+            title="Camelot / Musical Key (Click for Wheel)"
           >
+            {activeTrack?.key_name || (activeTrack?.camelot ? `${activeTrack.camelot} Key` : '8A / Am')}
+          </div>
+        </div>
+
+        {/* 3. CENTER: Wide Panoramic Beatport Waveform */}
+        <div className="flex-1 min-w-0 h-10 flex items-center relative">
+          <BeatportWaveform
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={handleSeek}
+            track={activeTrack}
+          />
+
+          {/* '+' Button at the far right of the waveform */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (activeTrack) handleAddTrackToMixtape(activeTrack, e as any);
+            }}
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded hover:bg-white/10 text-zinc-500 hover:text-white flex items-center justify-center text-xs transition"
+            title="Add track to AI DJ Set"
+          >
+            ＋
+          </button>
+        </div>
+
+        {/* 4. RIGHT: [Pink Pill] [Cues] [Vol] [⏮] [Play] [⏭] [Queue] */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* DJ Live Copilot Button */}
+          <button
+            onClick={() => setShowLiveCopilotModal(true)}
+            className="px-2.5 py-1.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 shadow-sm"
+            title="เปิด DJ Live Copilot (แนะนำเพลงถัดไปแบบ Real-time)"
+          >
+            <Radio size={12} className="animate-pulse text-emerald-400" />
+            <span>Copilot</span>
+          </button>
+
+          {/* Beatport Magenta/Pink Action Button */}
+          {activeTrack ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddTrackToMixtape(activeTrack, e as any);
+              }}
+              className="px-3 py-1.5 rounded-md bg-[#e11d48] hover:bg-[#f43f5e] active:scale-95 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5"
+              title="Add this track to Mixtape / DJ Set"
+            >
+              <span>⚡ + Set</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                if (libraryTracks.length > 0) playTrack(libraryTracks[0], libraryTracks, false);
+              }}
+              className="px-3 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-semibold border border-white/10 transition"
+            >
+              Play Library
+            </button>
+          )}
+
+          {/* Hot Cues / Camelot Wheel */}
+          <button
+            onClick={() => setShowCamelotModal(true)}
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition"
+            title="Camelot Wheel & Cues"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="5" r="2"/>
+              <circle cx="12" cy="5" r="2"/>
+              <circle cx="19" cy="5" r="2"/>
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
+              <circle cx="5" cy="19" r="2"/>
+              <circle cx="12" cy="19" r="2"/>
+              <circle cx="19" cy="19" r="2"/>
+            </svg>
+          </button>
+
+          {/* Volume Control with Hover Slider */}
+          <div className="relative group flex items-center">
             <button
               onClick={toggleMute}
-              className="text-xs text-[#a7a7a7] hover:text-white transition p-0.5"
-              title={isMuted || volume === 0 ? 'Unmute (M)' : 'Mute (M)'}
+              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition text-sm"
+              title="Volume"
             >
               {isMuted || volume === 0 ? '🔇' : volume < 0.35 ? '🔈' : volume < 0.7 ? '🔉' : '🔊'}
             </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={isMuted ? 0 : volume}
-              onChange={handleVolume}
-              className="w-12 sm:w-16 md:w-20 h-1 bg-[#3e3e3e] rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
-              title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-            />
-            <span className="text-[10px] font-mono font-bold text-[#1DB954] w-6 sm:w-7 text-right">
-              {isMuted || volume === 0 ? '0%' : `${Math.round(volume * 100)}%`}
-            </span>
+            <div className="hidden group-hover:flex absolute bottom-full mb-2 -left-6 bg-[#16161a] p-2.5 rounded-xl border border-white/15 shadow-2xl items-center gap-2 z-50">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={isMuted ? 0 : volume}
+                onChange={handleVolume}
+                className="w-20 h-1 bg-zinc-700 rounded appearance-none cursor-pointer accent-cyan-400"
+              />
+              <span className="text-[10px] font-mono text-zinc-300 w-7 text-right">
+                {Math.round((isMuted ? 0 : volume) * 100)}%
+              </span>
+            </div>
           </div>
 
-          {/* Queue Drawer Button */}
+          {/* Previous Track */}
           <button
-            onClick={() => setShowQueueDrawer(true)}
-            className="relative px-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#282828] text-[#e0e0e0] hover:text-white font-semibold text-xs border border-[#333333] transition flex items-center gap-1 shrink-0"
-            title="Open Up Next Queue"
+            onClick={handlePlayPrev}
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition active:scale-95"
+            title="Previous Track"
           >
-            <span>📑</span>
-            <span className="hidden md:inline">Queue</span>
-            {playQueue.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[#1DB954] text-black font-mono text-[9px] font-bold">
-                {playQueue.length}
-              </span>
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+            </svg>
+          </button>
+
+          {/* Circular Dark Play / Pause Button (Beatport Pro Style) */}
+          <button
+            onClick={togglePlay}
+            className="w-9 h-9 rounded-full bg-[#242429] hover:bg-[#32323a] border border-white/10 text-white flex items-center justify-center transition active:scale-95 shadow-md"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? (
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
             )}
           </button>
 
-          {/* Expand Fullscreen Button */}
+          {/* Next Track */}
           <button
-            onClick={() => setShowExpandedPlayer(true)}
-            className="p-1.5 text-[#a7a7a7] hover:text-white hover:bg-[#242424] rounded-lg text-xs transition shrink-0"
-            title="Expand Fullscreen Player"
+            onClick={handlePlayNext}
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition active:scale-95"
+            title="Next Track"
           >
-            ⛶
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+            </svg>
+          </button>
+
+          {/* Up Next Queue */}
+          <button
+            onClick={() => setShowQueueDrawer(true)}
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition relative"
+            title="Open Up Next Queue"
+          >
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+            </svg>
+            {playQueue.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400" />
+            )}
           </button>
         </div>
       </footer>
@@ -9469,6 +9729,19 @@ const BeatportWaveform: React.FC<BeatportWaveformProps> = ({
           </div>
         </div>
       )}
+
+      {/* DJ Live Copilot (PulseDJ Mode) Modal */}
+      <LiveCopilotModal
+        isOpen={showLiveCopilotModal}
+        onClose={() => setShowLiveCopilotModal(false)}
+        currentTrack={activeTrack}
+        libraryTracks={libraryTracks}
+        onPlayTrack={(t) => playTrack(t, libraryTracks, false)}
+        activePlayingTrack={activeTrack}
+        isPlaying={isPlaying}
+        invokeBackend={invokeBackend}
+        showToast={showToast}
+      />
 
     </div>
   );

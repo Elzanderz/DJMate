@@ -594,6 +594,10 @@ class DJAnalyzerService:
                 elif mixtape_mode == 'sunset_lounge':
                     star_diff = abs(cand_stars - 2)
                     cost = (key_dist * 4.5) + (bpm_diff * 3.0) + (star_diff * 3.0) + vibe_cost
+                elif mixtape_mode == 'wave_roller':
+                    cost = (key_dist * 5.0) + (bpm_cost * 1.5) + (abs(cand_stars - curr_stars) * 1.2) + vibe_cost
+                elif mixtape_mode == 'steady_groove':
+                    cost = (key_dist * 9.0) + (bpm_cost * 2.5) + (abs(cand_stars - curr_stars) * 2.0) + vibe_cost
                 else: # harmonic_flow
                     cost = (key_dist * 8.0) + (bpm_cost * 1.5) + (abs(cand_stars - curr_stars) * 1.0) + vibe_cost
 

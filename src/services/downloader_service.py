@@ -49,16 +49,25 @@ class DownloaderService:
         clean_core = re.sub(r'\s*\[[^\]]*\]', '', clean_core)
         clean_core = ' '.join(clean_core.split()).strip().rstrip('. ')
 
+        # Clean title without bracket metadata (e.g. removes "(feat. ...)", "(Album Version)")
+        clean_title = re.sub(r'\s*[\(\[\{].*?[\)\]\}]', '', title).strip().rstrip('. ')
+        clean_title = re.sub(r'\s*-\s*from\s+.*$', '', clean_title, flags=re.I).strip().rstrip('. ')
+
         # Priority 1: Official Topic / Audio / Lyrics (Clean Studio Masters)
         if artist and title:
             candidates.append(f"{artist} {title} Topic")
             candidates.append(f"{artist} - {title} Official Audio")
+            if clean_title and clean_title != title:
+                candidates.append(f"{artist} {clean_title} Topic")
+                candidates.append(f"{artist} - {clean_title} Official Audio")
             candidates.append(f"{artist} - {title} Official MV")
             candidates.append(f"{artist} - {title} MV")
             candidates.append(f"{artist} - {title} Audio")
             candidates.append(f"{artist} - {title} Lyrics")
             candidates.append(f"{artist} - {title} Lyric Video")
             candidates.append(f"{artist} - {title}")
+            if clean_title and clean_title != title:
+                candidates.append(f"{artist} - {clean_title}")
 
             # Priority 1.5: If collaborating artists (e.g. "2Ectasy, jeffy, Kakagoesbackhome"), also add primary artist queries
             if (',' in artist or ' feat' in artist.lower() or ' ft.' in artist.lower() or ' x ' in artist.lower() or ' & ' in artist.lower()):
@@ -66,6 +75,8 @@ class DownloaderService:
                 if primary_artist and len(primary_artist) > 1 and primary_artist.lower() != artist.lower():
                     candidates.append(f"{primary_artist} {title} Topic")
                     candidates.append(f"{primary_artist} - {title} Official Audio")
+                    if clean_title and clean_title != title:
+                        candidates.append(f"{primary_artist} {clean_title} Topic")
                     candidates.append(f"{primary_artist} - {title} Official MV")
                     candidates.append(f"{primary_artist} - {title} Lyrics")
                     candidates.append(f"{primary_artist} - {title}")
@@ -113,18 +124,18 @@ class DownloaderService:
     @classmethod
     def score_studio_entry(cls, entry: Dict, artist: str = '', title: str = '', target_duration_sec: float = 0) -> int:
         """
-        Ranks candidate YouTube videos ensuring strict title/artist relevance,
-        prioritizing pure Studio Master / Topic audio and eliminating MV skits / sound effects.
-        Heavily penalizes phone recordings, fancams, live concerts, karaoke, and minus-one tracks.
+        Ranks candidate YouTube / SoundCloud entries ensuring 100% strict title & artist relevance.
+        Strictly disqualifies (-9999) any video where the title does not match,
+        eliminating compilation DJ sets, wrong songs from official channels, phone recordings,
+        fancams, live concerts, karaoke, and duration mismatches.
         """
         if not entry:
-            return -999
+            return -9999
 
-        score = 0
         t = (entry.get('title') or '').lower()
-        uploader = (entry.get('uploader') or '').lower()
+        uploader = (entry.get('uploader') or entry.get('channel') or '').lower()
         desc = (entry.get('description') or '').lower()
-        duration = entry.get('duration') or 0
+        duration = float(entry.get('duration') or 0)
 
         def compact_str(s: str) -> str:
             return re.sub(r'[\s\W_]+', '', (s or '').lower())
@@ -135,37 +146,11 @@ class DownloaderService:
         user_wants_tribute = bool(re.search(r'\b(tribute|memorial)\b', combined_meta, re.I))
         user_wants_cover = bool(re.search(r'\b(cover|karaoke)\b', combined_meta, re.I)) or 'คาราโอเกะ' in combined_meta or 'คัฟเวอร์' in combined_meta
 
-        # 0. Compact string matching for Thai & English relevance
-        c_title = compact_str(title)
-        c_artist = compact_str(artist)
-        c_t = compact_str(t)
-        c_uploader = compact_str(uploader)
-        c_desc = compact_str(desc)
+        # =========================================================================
+        # 1. IMMEDIATE DISQUALIFICATIONS (Strict -9999 Disqualification)
+        # =========================================================================
 
-        if c_title:
-            if c_title in c_t:
-                score += 200
-            elif c_title in c_desc:
-                score += 80
-            else:
-                # Check partial match for longer titles
-                title_words = [compact_str(w) for w in re.split(r'[\s\(\)\[\]\-]+', title) if len(w) > 1]
-                matched = sum(1 for w in title_words if w in c_t or w in c_desc)
-                if title_words and (matched / len(title_words)) >= 0.6:
-                    score += 120
-                else:
-                    score -= 600
-
-        if c_artist:
-            if c_artist in c_uploader or c_artist in c_t:
-                score += 100
-            elif c_artist in c_desc:
-                score += 50
-            else:
-                score -= 100
-
-        # 1. Strict Karaoke / Backing Track / Instrumental Rejection (-3000)
-        is_karaoke = False
+        # 1.1 Karaoke / Backing Track / Minus-One / Instrumental
         if not user_wants_cover:
             karaoke_terms = [
                 'คาราโอเกะ', 'ดนตรีเปล่า', 'ดนตรีล้วน', 'ดนตรีสดเปล่า', 'ตัดเสียงร้อง', 'ไม่มีเสียงร้อง',
@@ -176,14 +161,11 @@ class DownloaderService:
                 'sing-along', 'instrumental'
             ]
             if any(term in t for term in karaoke_terms) or any(term in uploader for term in karaoke_terms):
-                is_karaoke = True
-            elif re.search(r'[\(\[\{]\s*(?:ดนตรี|inst\.?|instrumental|karaoke)\s*[\)\]\}]', t, re.I):
-                is_karaoke = True
-            elif any(term in desc for term in ['คาราโอเกะ', 'ดนตรีเปล่า', 'ตัดเสียงร้อง', 'backing track', 'minus one']):
-                is_karaoke = True
+                return -9999
+            if re.search(r'[\(\[\{]\s*(?:ดนตรี|inst\.?|instrumental|karaoke)\s*[\)\]\}]', t, re.I):
+                return -9999
 
-        # 2. Strict Phone Recording / Fancam / Bootleg / Live Stage Rejection (-3000)
-        is_fancam_or_live = False
+        # 1.2 Phone Recording / Fancam / Bootleg / Live Stage
         if not user_wants_live:
             fancam_live_terms = [
                 'แฟนแคม', 'บันทึกการแสดงสด', 'ถ่ายจากมือถือ', 'คลิปมือถือ', 'กล้องมือถือ', 'เสียงจากกล้อง',
@@ -196,14 +178,11 @@ class DownloaderService:
                 'tiktok', 'reels', 'crowd', 'unplugged live'
             ]
             if any(term in t for term in fancam_live_terms):
-                is_fancam_or_live = True
-            elif re.search(r'\b(cam|fancam|live|concert|tour)\b', t, re.I):
-                is_fancam_or_live = True
-            elif any(term in desc for term in ['บันทึกการแสดงสด', 'ถ่ายจากมือถือ', 'audience recording', 'recorded live', 'live at']):
-                is_fancam_or_live = True
+                return -9999
+            if re.search(r'\b(cam|fancam|live|concert|tour)\b', t, re.I):
+                return -9999
 
-        # 3. Strict Cover / Gimmick Rejection (-3000)
-        is_cover_or_gimmick = False
+        # 1.3 Cover / Gimmick / 1 Hour Loop
         if not user_wants_cover:
             gimmick_terms = [
                 'cover', 'คัฟเวอร์', 'covers', 'remake', 'parody', 'slowed', 'reverb', 'sped up',
@@ -212,33 +191,114 @@ class DownloaderService:
                 'review', 'tutorial', 'behind the scenes', 'making of', 'dance practice', 'ซ้อมเต้น'
             ]
             if any(term in t for term in gimmick_terms):
-                is_cover_or_gimmick = True
+                return -9999
 
-        # 3.5 Strict Tribute / Memorial Rejection (-2000)
-        is_tribute = False
+        # 1.4 Tribute / Memorial
         if not user_wants_tribute:
             if re.search(r'\b(tribute|memorial|in\s*memory\s*of)\b', f"{t} {uploader}", re.I):
-                is_tribute = True
+                return -9999
 
-        if is_karaoke:
-            score -= 3000
-        if is_fancam_or_live:
-            score -= 3000
-        if is_cover_or_gimmick:
-            score -= 3000
-        if is_tribute:
-            score -= 2000
+        # 1.5 Short video / duration penalties
+        if 0 < duration < 60:
+            return -9999  # Meme / short / snippet
 
-        # 4. Short video / duration penalties
-        if duration > 0 and duration < 65:
-            score -= 2500  # Shorts or meme clip
+        # 1.6 Duration Guard against Megamixes / DJ sets / Full albums
+        if target_duration_sec > 0 and duration > 0:
+            delta = abs(duration - target_duration_sec)
+            # If duration delta is > 45s or > 1.5x length, or < 0.6x length:
+            if delta > 45.0 or duration > (target_duration_sec * 1.5) or duration < (target_duration_sec * 0.6):
+                return -9999
+        elif target_duration_sec == 0 and duration > 0:
+            if duration > 900:  # > 15 minutes is a mix or full album
+                return -9999
 
-        # 5. Studio Topic Channel Boost (+300)
+        # =========================================================================
+        # 2. STRICT TITLE MATCHING (MANDATORY: Video title MUST contain song title)
+        # =========================================================================
+        c_t = compact_str(t)
+        raw_title = (title or '').strip()
+        core_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', raw_title).strip()
+        core_title = re.sub(r'\s*-\s*from\s+.*$', '', core_title, flags=re.I).strip()
+
+        # Extract subtitles inside brackets (e.g. "Melt" from "โต๊ะริม (Melt)", "spring" from "ดอกไม้ที่รอฝน (spring)")
+        bracket_matches = re.findall(r'[\(\[\{](.*?)[\)\]\}]', raw_title)
+        subtitles = []
+        for bm in bracket_matches:
+            clean_sub = re.sub(r'^(?:feat\.?|ft\.?|with|album version|explicit|remastered|clean|dirty|original)\s*', '', bm, flags=re.I).strip()
+            if len(clean_sub) >= 2 and not clean_sub.lower().startswith(('feat', 'ft', 'remaster')):
+                subtitles.append(clean_sub)
+
+        variants = [raw_title, core_title] + subtitles
+        valid_variants = [v for v in variants if v and len(compact_str(v)) >= 2]
+
+        title_matched = False
+        exact_title_match = False
+
+        for v in valid_variants:
+            c_v = compact_str(v)
+            if c_v and c_v in c_t:
+                title_matched = True
+                exact_title_match = True
+                break
+
+        if not title_matched:
+            # Check token containment for longer English / Thai titles
+            for v in valid_variants:
+                words = [compact_str(w) for w in re.split(r'[\s\W_]+', v) if len(w) >= 2]
+                distinctive_words = [w for w in words if w not in ('the', 'and', 'for', 'with', 'from', 'you', 'me', 'in', 'on', 'of', 'at')]
+                target_words = distinctive_words if len(distinctive_words) >= 2 else words
+                if len(target_words) >= 2:
+                    matched_cnt = sum(1 for w in target_words if w in c_t)
+                    if (matched_cnt / float(len(target_words))) >= 0.7:
+                        title_matched = True
+                        break
+
+        # CRITICAL PROTECTION: If song title is completely absent from the video title, DISQUALIFY!
+        # Do NOT allow description matching or official channel boosts to bypass this!
+        if not title_matched:
+            return -9999
+
+        # =========================================================================
+        # 3. ARTIST MATCHING & SHORT TITLE PROTECTION
+        # =========================================================================
+        c_uploader = compact_str(uploader)
+        c_artist = compact_str(artist)
+        artist_matched = False
+
+        if c_artist:
+            art_parts = [compact_str(p) for p in re.split(r'[,&x/+]|\bfeat\.?|\bft\.?|\bvs\.?\b', artist, flags=re.I) if len(compact_str(p)) >= 2]
+            if not art_parts:
+                art_parts = [c_artist]
+
+            for ap in art_parts:
+                if ap in c_t or ap in c_uploader:
+                    artist_matched = True
+                    break
+
+            # If title is very short or generic (<= 5 chars, e.g. "Focus", "Easy", "Home", "Run", "Better")
+            # and artist does NOT match video title or uploader, DISQUALIFY to prevent wrong song downloads!
+            title_is_short = len(compact_str(core_title or raw_title)) <= 5
+            if title_is_short and not artist_matched:
+                return -9999
+
+        # =========================================================================
+        # 4. STUDIO MASTER SCORING (Only for verified, genuine candidate tracks)
+        # =========================================================================
+        score = 250  # Base reward for verified title match
+        if exact_title_match:
+            score += 150
+
+        if artist_matched:
+            score += 200
+        elif c_artist:
+            score -= 150
+
+        # Topic Studio Release Boost (+350)
         is_topic = ('topic' in uploader or 'provided to youtube by' in desc or 'auto-generated by youtube' in desc)
-        if is_topic and not is_karaoke and not is_fancam_or_live and not is_cover_or_gimmick:
-            score += 300
+        if is_topic:
+            score += 350
 
-        # 6. Official Record Label Boost (+250)
+        # Official Label Boost (+250)
         official_labels = [
             'genelab', 'gmm grammy', 'gmm music', 'genie records', 'whattheduck', 'spicydisc', 'smallroom',
             'high cloud entertainment', 'muzik move', 'boxx music', 'loveis', 'ch7hd', 'one31',
@@ -253,37 +313,34 @@ class DownloaderService:
             'hype train', 'bakery music', 'rs friends', 'rsiammusic', 'rs promotion', 'grammy gold',
             'bec-tero', 'sony music thailand', 'warner music thailand', 'universal music thailand'
         ]
-        is_official_label = any(lbl in uploader for lbl in official_labels)
-        if is_official_label and not is_karaoke and not is_fancam_or_live and not is_cover_or_gimmick:
+        if any(lbl in uploader for lbl in official_labels):
             score += 250
 
-        # 7. Official Audio / Lyric Track Boost (+180)
+        # Official Audio / Lyric Track Boost
         if any(k in t for k in ['official audio', 'studio audio', 'album version']):
-            score += 180
+            score += 200
         elif 'audio' in t and any(k in t for k in ['official', 'lyrics', 'visualizer']):
-            score += 120
-        elif any(k in t for k in ['official mv', 'official music video', 'official video', '|official mv|']):
             score += 140
+        elif any(k in t for k in ['official mv', 'official music video', 'official video', '|official mv|']):
+            score += 100
         elif any(k in t for k in ['lyric video', 'lyrics']):
-            score += 90
+            score += 80
 
-        # 8. Exact Duration Matching
+        # Exact Duration Matching
         if target_duration_sec > 0 and duration > 0:
             delta = abs(duration - target_duration_sec)
             if delta <= 2.5:
-                score += 220
+                score += 250
             elif delta <= 5.0:
-                score += 120
-            elif delta <= 8.0:
-                score += 50
-            elif delta > 15.0:
-                score -= 250
-            elif delta > 35.0:
-                score -= 800
-            elif delta > 60.0:
-                score -= 1800
+                score += 180
+            elif delta <= 10.0:
+                score += 100
+            elif delta <= 20.0:
+                score += 20
+            elif delta > 25.0:
+                score -= 200
 
-        # 9. General reasonable duration preference (1.5 - 7 mins)
+        # General reasonable duration preference (1.5 - 7 mins)
         if 90 <= duration <= 480:
             score += 20
 
@@ -654,15 +711,31 @@ class DownloaderService:
                         except Exception as fb_err:
                             last_error = fb_err
 
-                if not download_success:
+                if not download_success and (artist or title):
                     try:
-                        fallback_sc = f"{artist} {title}"
+                        fallback_sc = f"{artist} {title}".strip()
                         if progress_callback:
-                            progress_callback(15.0, 'Searching SoundCloud Master Stream...')
-                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                            info = ydl.extract_info(f'scsearch1:{fallback_sc}', download=True)
-                            if info:
-                                download_success = True
+                            progress_callback(15.0, 'Searching SoundCloud with strict verification...')
+                        with yt_dlp.YoutubeDL(flat_opts) as ydl_sc_flat:
+                            sc_res = ydl_sc_flat.extract_info(f'scsearch3:{fallback_sc}', download=False)
+                            if sc_res and 'entries' in sc_res:
+                                sc_entries = [e for e in sc_res['entries'] if e]
+                                for sce in sc_entries:
+                                    sce['studio_score'] = cls.score_studio_entry(
+                                        sce,
+                                        artist=artist,
+                                        title=title,
+                                        target_duration_sec=target_dur_sec
+                                    )
+                                sc_entries.sort(key=lambda e: e.get('studio_score', -9999), reverse=True)
+                                for sce in sc_entries:
+                                    if sce.get('studio_score', -9999) > 0 and (sce.get('url') or sce.get('webpage_url')):
+                                        sc_url = sce.get('url') or sce.get('webpage_url')
+                                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                            info = ydl.extract_info(sc_url, download=True)
+                                            if info:
+                                                download_success = True
+                                                break
                     except Exception as sc_fb_err:
                         last_error = sc_fb_err
 

@@ -83,6 +83,7 @@ fn run_bridge(cmd: &str, payload: Value) -> Result<Value, String> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            python_bins.push(format!("{}\\Python\\bin\\python.exe", local_app_data));
             python_bins.push(format!("{}\\Python\\pythoncore-3.11-64\\python.exe", local_app_data));
             python_bins.push(format!("{}\\Python\\pythoncore-3.12-64\\python.exe", local_app_data));
             python_bins.push(format!("{}\\Programs\\Python\\Python311\\python.exe", local_app_data));
@@ -310,6 +311,81 @@ async fn save_tags(track: Value) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || run_bridge("save_tags", json!({ "track": track })))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_live_dj_track() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || run_bridge("get_live_dj_track", json!({})))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+async fn get_next_track_recommendations(
+    current_track: Option<Value>,
+    currentTrack: Option<Value>,
+    library_tracks: Option<Value>,
+    libraryTracks: Option<Value>,
+    filter_mode: Option<String>,
+    filterMode: Option<String>,
+    max_results: Option<usize>,
+    maxResults: Option<usize>,
+    payload: Option<Value>,
+) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cur = current_track
+            .or(currentTrack)
+            .or_else(|| payload.as_ref().and_then(|p| p.get("current_track").or_else(|| p.get("currentTrack")).cloned()))
+            .unwrap_or_else(|| json!({}));
+        let lib = library_tracks
+            .or(libraryTracks)
+            .or_else(|| payload.as_ref().and_then(|p| p.get("library_tracks").or_else(|| p.get("libraryTracks")).cloned()))
+            .unwrap_or_else(|| json!([]));
+        let fm = filter_mode
+            .or(filterMode)
+            .or_else(|| payload.as_ref().and_then(|p| p.get("filter_mode").or_else(|| p.get("filterMode")).and_then(|m| m.as_str().map(String::from))))
+            .unwrap_or_else(|| "all".to_string());
+        let max_res = max_results
+            .or(maxResults)
+            .or_else(|| payload.as_ref().and_then(|p| p.get("max_results").or_else(|| p.get("maxResults")).and_then(|m| m.as_u64().map(|v| v as usize))))
+            .unwrap_or(30);
+
+        run_bridge(
+            "get_next_track_recommendations",
+            json!({
+                "current_track": cur,
+                "library_tracks": lib,
+                "filter_mode": fm,
+                "max_results": max_res
+            }),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+async fn set_mini_overlay_mode(
+    window: tauri::Window,
+    is_mini: Option<bool>,
+    isMini: Option<bool>,
+    payload: Option<Value>,
+) -> Result<(), String> {
+    let mini = is_mini
+        .or(isMini)
+        .or_else(|| payload.as_ref().and_then(|p| p.get("is_mini").or_else(|| p.get("isMini")).and_then(|v| v.as_bool())))
+        .unwrap_or(false);
+
+    if mini {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 420.0, height: 750.0 }));
+    } else {
+        let _ = window.set_always_on_top(false);
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 1200.0, height: 800.0 }));
+    }
+    Ok(())
 }
 
 fn find_project_root() -> PathBuf {
@@ -790,7 +866,10 @@ pub fn run() {
             search_local_folder,
             search_online_tracks,
             check_system_health,
-            install_missing_modules
+            install_missing_modules,
+            get_live_dj_track,
+            get_next_track_recommendations,
+            set_mini_overlay_mode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

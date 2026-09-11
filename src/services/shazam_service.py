@@ -5,10 +5,7 @@ import tempfile
 import subprocess
 import yt_dlp
 from typing import List, Dict, Optional
-try:
-    from shazamio import Shazam
-except ImportError:
-    Shazam = None
+Shazam = None
 from .spotify_service import SpotifyService
 from .genre_classifier_service import GenreClassifierService
 
@@ -16,6 +13,7 @@ class ShazamService:
     @classmethod
     async def recognize_audio_bytes(cls, audio_bytes: bytes) -> Optional[Dict]:
         try:
+            from shazamio import Shazam
             shazam = Shazam()
             out = await shazam.recognize(audio_bytes)
             track = out.get('track')

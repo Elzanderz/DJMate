@@ -33,6 +33,10 @@ class HistoryService:
             return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'downloads', 'library_history.json'))
 
     @classmethod
+    def get_history(cls, target_dir: Optional[str] = None) -> List[Dict]:
+        return cls.get_all(target_dir)
+
+    @classmethod
     def _ensure_db(cls, target_dir: Optional[str] = None):
         db_file = cls.get_db_file(target_dir)
         os.makedirs(os.path.dirname(db_file), exist_ok=True)

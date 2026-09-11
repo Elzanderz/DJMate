@@ -19,3 +19,4 @@ src-tauri/target/
 *.log
 *.msi
 *.exe
+scratch/

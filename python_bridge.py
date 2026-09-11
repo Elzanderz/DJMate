@@ -41,6 +41,8 @@ from src.services.cleaner_service import CleanerService
 from src.services.activity_service import ActivityService
 from src.services.mashup_service import MashupService
 from src.services.shazam_service import ShazamService
+from src.services.dj_live_copilot_service import DJLiveCopilotService
+from src.services.dj_live_monitor_service import DJLiveMonitorService
 
 def handle_command(cmd_name: str, payload: dict) -> dict:
     spotify_service = SpotifyService()
@@ -446,6 +448,76 @@ def handle_command(cmd_name: str, payload: dict) -> dict:
                             pass
             HistoryService.sync_downloads_folder(target_dir)
         return {'result': {'success': True, 'converted_count': converted_count}}
+
+    elif cmd_name == 'generate_ai_playlist':
+        prompt = payload.get('prompt', '')
+        count = payload.get('count')
+        duration_minutes = payload.get('duration_minutes') or payload.get('durationMinutes')
+        if duration_minutes and int(duration_minutes) > 0:
+            count = max(5, min(50, round((int(duration_minutes) * 60) / 195)))
+        elif not count:
+            count = 15
+        else:
+            count = int(count)
+
+        api_key = payload.get('api_key') or payload.get('apiKey')
+        provider = payload.get('provider', 'gemini')
+        languages = payload.get('languages', ['thai', 'english'])
+        mixtape_mode = payload.get('mixtape_mode') or payload.get('mixtapeMode') or payload.get('energy_curve', 'peak_climb')
+        reference_tracks = payload.get('reference_tracks') or payload.get('referenceTracks')
+        commercial_level = payload.get('commercial_level') or payload.get('commercialLevel', 'balanced')
+
+        res = AICuratorService.generate_playlist(
+            prompt=prompt,
+            count=count,
+            api_key=api_key or None,
+            provider=provider,
+            languages=languages,
+            mixtape_mode=mixtape_mode,
+            duration_minutes=duration_minutes,
+            reference_tracks=reference_tracks,
+            commercial_level=commercial_level
+        )
+        return {'result': res}
+
+    elif cmd_name == 'reroll_ai_track':
+        track = payload.get('track', {})
+        vibe_intent = payload.get('vibe_intent', '')
+        prompt = payload.get('prompt', '')
+        api_key = payload.get('api_key') or payload.get('apiKey')
+        provider = payload.get('provider', 'gemini')
+        existing_tracks = payload.get('existing_tracks', [])
+        res = AICuratorService.reroll_track(
+            current_track=track,
+            prompt=prompt,
+            vibe_intent=vibe_intent,
+            existing_tracks=existing_tracks,
+            api_key=api_key or None,
+            provider=provider
+        )
+        return {'result': res}
+
+    elif cmd_name == 'get_live_dj_track':
+        status = DJLiveMonitorService.get_live_playing_track()
+        return {'result': status}
+
+    elif cmd_name == 'get_next_track_recommendations':
+        current_track = payload.get('current_track') or {}
+        library_tracks = payload.get('library_tracks') or []
+        if not library_tracks:
+            try:
+                library_tracks = HistoryService.get_history()
+            except Exception:
+                library_tracks = []
+        filter_mode = payload.get('filter_mode', 'all')
+        max_results = int(payload.get('max_results', 25))
+        recs = DJLiveCopilotService.recommend_next_tracks(
+            current_track=current_track,
+            library_tracks=library_tracks,
+            filter_mode=filter_mode,
+            max_results=max_results
+        )
+        return {'result': recs}
 
     elif cmd_name == 'export_rekordbox':
         tracks = payload.get('tracks', [])

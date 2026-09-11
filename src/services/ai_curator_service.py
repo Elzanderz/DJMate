@@ -94,11 +94,27 @@ class AICuratorService:
         api_key: Optional[str] = None,
         provider: str = 'gemini',
         languages: Optional[List[str]] = None,
-        mixtape_mode: str = 'peak_climb'
+        mixtape_mode: str = 'peak_climb',
+        duration_minutes: Optional[int] = None,
+        reference_tracks: Optional[List[str]] = None,
+        commercial_level: str = 'balanced'
     ) -> Dict:
         prompt = (prompt or '').strip()
+        if duration_minutes and int(duration_minutes) > 0:
+            count = max(5, min(50, round((int(duration_minutes) * 60) / 195)))
         count = max(5, min(count, 50))
         languages = languages or ['thai', 'english']
+
+        if reference_tracks:
+            ref_str = ', '.join(reference_tracks) if isinstance(reference_tracks, list) else str(reference_tracks)
+            if ref_str.strip():
+                prompt = f"{prompt} [Reference Tracks / Seeds: {ref_str.strip()}]"
+
+        if commercial_level == 'underground':
+            prompt += " [Style: Underground, Club-Oriented, Deep Grooves, Less Radio Commercial]"
+        elif commercial_level in ('commercial', 'commercial_hits', 'mainstream'):
+            prompt += " [Style: High-Energy Mainstream Commercial Hits, Crowd Singalongs]"
+
         vibe_intent = cls._detect_vibe_intent(prompt)
 
         # If user wants a chill/relaxing vibe, override aggressive peak climbing to smooth lounge
@@ -312,6 +328,74 @@ class AICuratorService:
             'mixtape_mode': target_mode,
             'total_tracks': len(sorted_mixtape),
             'tracks': sorted_mixtape
+        }
+
+    @classmethod
+    def reroll_track(
+        cls,
+        current_track: Dict,
+        prompt: str = '',
+        vibe_intent: str = '',
+        existing_tracks: Optional[List[Dict]] = None,
+        api_key: Optional[str] = None,
+        provider: str = 'gemini'
+    ) -> Dict:
+        """Find an alternative track that matches the current track's Camelot Key, BPM, and energy."""
+        target_camelot = current_track.get('camelot', '8A')
+        target_bpm = float(current_track.get('bpm', 125))
+        target_stars = int(current_track.get('stars', 3))
+        existing_keys = {cls.song_key(t.get('artist', ''), t.get('title', '')) for t in (existing_tracks or [])}
+        existing_keys.add(cls.song_key(current_track.get('artist', ''), current_track.get('title', '')))
+
+        intent = vibe_intent or cls._detect_vibe_intent(prompt or current_track.get('genre', 'Dance'))
+        candidates_res = cls._builtin_curator(prompt or current_track.get('genre', 'Dance'), count=30, vibe_intent=intent)
+        pool = candidates_res.get('tracks', [])
+        
+        best_candidate = None
+        best_diff = float('inf')
+        
+        for cand in pool:
+            k = cls.song_key(cand.get('artist', ''), cand.get('title', ''))
+            if k in existing_keys:
+                continue
+            cand_bpm = float(cand.get('bpm', target_bpm))
+            diff = abs(cand_bpm - target_bpm)
+            if diff < best_diff:
+                best_diff = diff
+                best_candidate = cand
+
+        if not best_candidate:
+            best_candidate = pool[0] if pool else current_track
+
+        from .spotify_service import SpotifyService
+        from .dj_analyzer_service import CAMELOT_COLORS
+        q = f"{best_candidate.get('artist', '')} - {best_candidate.get('title', '')}".strip(' -')
+        match = SpotifyService.search_track(q) or {}
+        final_title = cls.clean_studio_title(best_candidate.get('title') or match.get('title', q))
+        artist = best_candidate.get('artist') or match.get('artist', 'Artist')
+        bpm = match.get('bpm') or target_bpm
+        camelot = match.get('camelot') or target_camelot
+        return {
+            'id': match.get('id') or f"reroll_{abs(hash(q)) % 100000}",
+            'title': final_title,
+            'artist': artist,
+            'album': match.get('album') or current_track.get('album', 'AI Set'),
+            'playlist_name': current_track.get('playlist_name', 'AI DJ Set'),
+            'folder_mode': 'playlist',
+            'source': 'AI Smart Mixtape',
+            'duration_ms': int(match.get('duration_ms') or 210000),
+            'cover_url': match.get('cover_url') or '',
+            'year': match.get('year') or '',
+            'track_number': current_track.get('track_number', 1),
+            'search_query': f"{artist} - {final_title}",
+            'vibe_note': f"Harmonic alternative matching {target_camelot}",
+            'bpm': round(float(bpm), 1),
+            'camelot': camelot,
+            'color': CAMELOT_COLORS.get(camelot, '#8b5cf6'),
+            'genre': current_track.get('genre', 'Dance'),
+            'stars': target_stars,
+            'energy': target_stars * 2,
+            'rating_255': target_stars * 51
         }
 
     @classmethod
